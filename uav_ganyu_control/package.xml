@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>uav_ganyu_control</name>
+  <version>0.1.0</version>
+  <description>ROS 2 port of the local QuadrotorControllerGanYu with a simulation keyboard client.</description>
+  <maintainer email="noreply@example.com">Local workspace</maintainer>
+  <license>Proprietary</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>rclpy</depend>
+  <depend>px4_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>rosgraph_msgs</depend>
+  <depend>eigen</depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>
