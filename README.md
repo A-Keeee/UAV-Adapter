@@ -3,13 +3,6 @@
 基于 ROS 2 Humble、PX4 SITL 和 Gazebo Harmonic，面向终端控制接口适配、
 自定义无人机控制器接入以及单机飞行任务验证。
 
-## 项目来源
-
-本项目在 [Eaglewzw（Verse）](https://github.com/Eaglewzw) 的
-[Autonomous-Intercept-Drone](https://github.com/Eaglewzw/Autonomous-Intercept-Drone)
-基础上进行本机环境适配与开发，保留原作者署名及上游代码来源。
-原项目名称为 FPV-Intercept；本工作空间按照下述单机仿真与控制验证目标继续开发。
-
 ## 项目简介
 
 当前工作空间为 `/home/ake/SJTU/适配终端/gazebo_sim`。
@@ -70,7 +63,6 @@
 已有本机仿真环境和 `install/setup.bash` 时，仅重编译 GanYu 包：
 
 ```bash
-cd /home/ake/SJTU/适配终端/gazebo_sim
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 colcon build --symlink-install --packages-select uav_ganyu_control \
@@ -80,7 +72,6 @@ colcon build --symlink-install --packages-select uav_ganyu_control \
 尚未构建工作空间时，可先构建 GanYu 及其工作空间依赖：
 
 ```bash
-cd /home/ake/SJTU/适配终端/gazebo_sim
 source /opt/ros/humble/setup.bash
 colcon build --symlink-install --packages-up-to uav_ganyu_control \
   --cmake-args -DCMAKE_BUILD_TYPE=Release
@@ -112,7 +103,7 @@ source install/setup.bash
 #### 3.1 终端 1：启动场景
 
 ```bash
-cd /home/ake/SJTU/适配终端/gazebo_sim
+
 ./run_obstacle_scene.sh
 ```
 
@@ -151,7 +142,6 @@ PX4 默认目录为 `~/PX4-Autopilot`，可通过环境变量 `PX4_DIR` 指定�
 #### 3.2 终端 2：启动 GanYu 与键盘
 
 ```bash
-cd /home/ake/SJTU/适配终端/gazebo_sim
 ./run_ganyu_keyboard.sh
 ```
 
@@ -265,8 +255,6 @@ GanYu 承担外部位置反馈到推力和角速度的控制计算；此路径�
 控制定时器周期为 5 ms（200 Hz），参考推进依赖 `/clock`；实际角速度发布频率还受时钟和计算影响。
 消息时间戳沿用节点 ROS 时钟的微秒值，参考轨迹单独使用订阅到的仿真时间。
 
-移植时作出的调整目前仍保留：
-
 - 质量由原 `myparams.json` 的 0.207 kg 改为当前模型各 link 之和约 2.125307692 kg；
   这里只改变控制器参数，没有改写模型质量。
 - 推力上限由原配置 20 N 改为 30 N；位置/速度/积分增益分别为三轴 9.75、3.6、0.5，
@@ -309,20 +297,7 @@ u = factor * signal² + (1 - factor) * signal
 
 <a id="ganyu-land-policy"></a>
 
-#### 3.6 当前降落行为：附加自动条件已删除
-
-**当前 GanYu 节点不会因为下面这些条件主动发出 LAND：**
-
-- 倾角超过原先设置的 35°。
-- 里程计或位置反馈超过原先设置的 0.3 秒未更新。
-- 仿真时钟超过 0.5 秒未更新，或飞控状态超过 3 秒未更新。
-- 键盘存活心跳超过 2 秒未更新。
-- Offboard、解锁等阶段等待超过 15 秒。
-- 仿真时间倒退，或一次控制步的仿真时间增量超过 0.5 秒。
-- EKF 重置时位置跳变超过 0.25 m 或姿态跳变约 5°。
-- 控制计算抛出异常或产生非有限输出。
-
-现在这些情况的具体处理是：
+#### 3.6 当前降落行为
 
 - 反馈变旧或键盘心跳中断不会触发节点降落；有正向仿真时间增量时，继续使用最后接收的有效状态计算。
 - 仿真时间未前进或倒退时不执行该步控制计算，但继续发送 Offboard 模式心跳。
@@ -369,7 +344,6 @@ GanYu 使用的 PX4 输出包括 `/px4_1/fmu/out/` 下的
 在另一个终端查看状态和日志。下面两个日志路径对应脚本启动；手动启动的日志路径见第 4.10 节：
 
 ```bash
-cd /home/ake/SJTU/适配终端/gazebo_sim
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 topic echo /ganyu/status --once
@@ -443,7 +417,6 @@ Agent → Gazebo 服务端 → Gazebo GUI（可选）→ PX4
 终端之间不会自动共享后来设置的变量，因此后面共享运行目录采用文件系统中的 `latest` 链接。
 
 ```bash
-cd /home/ake/SJTU/适配终端/gazebo_sim
 export PATH="$HOME/.local/bin:$PATH"
 source /opt/ros/humble/setup.bash
 source install/setup.bash
@@ -689,7 +662,6 @@ OakD-Lite 相机和 265 g 的 MID-360 仿真负载。原 PX4 模型文件和默�
 依赖安装在用户目录，不替换系统库、CUDA、驱动或 PX4 源码。
 
 ```bash
-cd /home/ake/SJTU/适配终端/gazebo_sim
 ./scripts/setup_mid360_sim.sh
 source /opt/ros/humble/setup.bash
 source install/setup.bash
@@ -705,7 +677,6 @@ colcon build --symlink-install --packages-select uav_sim_visualization
 终端 1：启动新机型和传感器链路，等待 `READY`：
 
 ```bash
-cd /home/ake/SJTU/适配终端/gazebo_sim
 ./run_obstacle_scene.sh --mid360
 ```
 
@@ -716,7 +687,6 @@ cd /home/ake/SJTU/适配终端/gazebo_sim
 终端 2：打开相机与点云显示：
 
 ```bash
-cd /home/ake/SJTU/适配终端/gazebo_sim
 ./run_rviz.sh
 ```
 
@@ -734,7 +704,6 @@ odom → base_link → mid360_link
 终端 3：需要键盘试飞时，按新负载质量启动已有控制器：
 
 ```bash
-cd /home/ake/SJTU/适配终端/gazebo_sim
 ./run_ganyu_keyboard.sh --ros-args -p mass:=2.390307692307692
 ```
 
@@ -813,26 +782,6 @@ ros2 launch uav_sim_visualization sensors.launch.py
 
 完整显示包说明见 [uav_sim_visualization/README.md](uav_sim_visualization/README.md)。
 
-#### 5.5 本机验证（2026-10-27）
-
-- `uav_sim_visualization` 编译、脚本语法和 ShellCheck 通过。
-- 原默认 `./run_obstacle_scene.sh --headless --check` 回归通过，仍生成 `x500_depth_1`，
-  位置、里程计、RGB 图像、相机内参与时钟检查成功。
-- 新机型场景检查通过，RGB 图像为 1920×1080；检查样本有 13304 个有效 XYZ 点，字段为
-  `x/y/z/intensity`。点数随视野、姿态及交替扫描帧变化。
-- 12 秒显示链路采样收到 314 帧图像、120 帧点云，点云按仿真时间计算为 10 Hz；
-  检查的 116 帧点云均能查询到消息时间对应的 `odom → mid360_link` TF。
-- 通过实际键盘客户端完成 `t` 起飞到 1.5 m、`w/d/e/s/a/q` 小步移动、空格悬停，
-  继续保持约 64 秒仿真时间后按 `l` 降落，确认落地上锁，再按 `x` 正常退出。
-  该轮基于 PX4 位置估计与参考轨迹的 RMSE 约 0.0144 m，最大误差约 0.0370 m，
-  最大机体倾角约 3.51°。这些是当前理想仿真的单次结果，不代表实机定位或飞行精度。
-- 本次没有验证持续长按、快速反向、激光建图或自动避障。
-
-场景数据记录在 `log/obstacle_scene/20261027_153112_GD8H/`；飞行采样与按键记录在
-`log/sensor_view_validation/low_mount_flight_retry/`，显示检查结果在
-`log/sensor_view_validation/viewer_check.json`。
-
-<a id="simulation-architecture"></a>
 
 ## 仿真环境组成与 PX4 目录
 
@@ -864,60 +813,8 @@ flowchart LR
     QGC[QGroundControl 或客户端 GCS 心跳] <-->|MAVLink| PX4
 ```
 
-### ROS 工作空间与 PX4 源码是两个目录
 
-- `/home/ake/SJTU/适配终端/gazebo_sim`：本工作空间，包含 `uav_ganyu_control`、`px4_msgs`、
-  场景资源、启动入口和文档；`build/`、`install/`、`log/` 为构建或运行产物。
-- `~/PX4-Autopilot`：PX4 飞控源码和 SITL 构建，本工作空间不需要复制进该目录。
-- `~/PX4-Autopilot/build/px4_sitl_default/bin/px4`：飞控可执行文件。
-- `~/PX4-Autopilot/build/px4_sitl_default/rootfs/gz_env.sh`：模型、插件和服务端配置的环境设置。
-- `~/PX4-Autopilot/Tools/simulation/gz/`：PX4 Gazebo 模型和世界。
-- `~/PX4-Autopilot/ROMFS/px4fmu_common/`：飞控启动和机型配置。
-- `~/PX4-Autopilot/src/modules/`：状态估计、控制器、DDS 等模块源码。
-
-当前脚本和手动命令均通过绝对路径调用 PX4，并为每次运行指定工作目录。
-因此当前单机流程可以从本工作空间启动，无需切换到 PX4 源码根目录。
-Gazebo 模型资源由 `gz_env.sh` 指向 PX4 目录，当前地图直接读取本仓库的 SDF。
-
-已有 [install_system_dependencies.sh](scripts/install_system_dependencies.sh) 和
-[setup_workspace.sh](scripts/setup_workspace.sh) 保留了整套历史环境安装/构建流程，
-其中包含额外实验包的依赖和资源复制操作。
-已有本机环境下进行单机开发时，按前面的定向编译和启动步骤操作即可。
-
-<a id="flight-controller"></a>
-
-## 仿真器中无人机的控制器是什么
-
-当前使用 GanYu 在 ROS 2 进程中根据状态和参考轨迹计算总推力、角速度，
-PX4 保留角速度内环及控制分配，Gazebo 负责电机与机体运动。
-GanYu 输入输出和参数见[控制器说明](#ganyu-controller)。
-
-如果另行选用 PX4 原生位置设定值接口，控制链路才是下面的位置/姿态控制流程：
-
-```text
-键盘位置目标 TrajectorySetpoint
-  → mc_pos_control：位置 P 控制 → 速度 PID 控制 → 推力与姿态目标
-  → mc_att_control：基于四元数的姿态比例控制 → 角速度目标
-  → mc_rate_control：角速度 PID 控制 → 力矩目标
-  → control_allocator：把推力/力矩分配给各电机
-  → Gazebo 电机与机体物理模型
-```
-
-反馈由 PX4 的 `ekf2` 等模块根据模拟传感器估计。发送速度设定值时可跳过位置环；
-发送角速度/推力等更底层设定值时，所使用的控制环也会变化，取决于 `OffboardControlMode`
-和消息内容。本仓库的 `uav_ganyu_control` 和 `uav_ibvs_control` 发布 `VehicleRatesSetpoint`，
-不能把所有节点都理解成同一种位置控制。GanYu 的完整链路和参数见
-[输入输出与移植范围](#ganyu-controller)；调节 PX4 的 `MPC_*` 不等于调节 GanYu 的位置反馈增益。
-
-可从 `~/PX4-Autopilot/ROMFS/px4fmu_common/init.d/rc.mc_apps` 查看控制模块启动，
-从 `src/modules/mc_pos_control/`、`mc_att_control/`、`mc_rate_control/`、
-`control_allocator/`、`ekf2/` 阅读实现。控制参数可在 QGC 中查询，常见前缀包括
-`MPC_*`、`MC_ROLL*`、`MC_PITCH*`、`MC_YAW*`、`CA_*`。
-环路结构和参数作用见官方[控制器图解](https://docs.px4.io/v1.16/zh/flight_stack/controller_diagrams)。
-
-<a id="vehicle-data"></a>
-
-## 无人机数据在哪里发布，在哪里调用
+## 无人机数据流说明
 
 ### 数据从哪里来，哪些话题能读
 
@@ -994,85 +891,6 @@ ros2 bag record /px4_1/fmu/out/vehicle_odometry \
   /px4_1/fmu/out/vehicle_local_position /px4_1/fmu/out/vehicle_status_v1
 ```
 
-### 当前单机代码在哪里调用这些数据
-
-- [ganyu_controller.cpp](uav_ganyu_control/src/ganyu_controller.cpp)：接收里程计、位置有效标志、
-  飞控状态、落地判定、命令 ACK 和仿真时间，运行控制和发布状态/调试数据。
-- [ganyu.hpp](uav_ganyu_control/include/uav_ganyu_control/ganyu.hpp)：控制计算和参考轨迹生成。
-- [keyboard.py](uav_ganyu_control/scripts/keyboard.py)：发送操作与存活消息，显示节点状态。
-- [check_obstacle_scene.py](scripts/check_obstacle_scene.py)：检查场景实体、状态和相机数据，保存结果。
-
-例如，在已加载环境的终端直接运行下面的 Python ROS 2 节点，即可每秒打印一次有效的本地位置。
-它只订阅数据，按 `Ctrl+C` 退出：
-
-```bash
-python3 - <<'PY'
-import rclpy
-from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
-from px4_msgs.msg import VehicleLocalPosition
-
-class PositionReader(Node):
-    def __init__(self):
-        super().__init__('position_reader')
-        self.latest = None
-        self.sub = self.create_subscription(
-            VehicleLocalPosition, '/px4_1/fmu/out/vehicle_local_position',
-            self.on_position, qos_profile_sensor_data)
-        self.timer = self.create_timer(1.0, self.report)
-
-    def on_position(self, msg):
-        self.latest = msg
-
-    def report(self):
-        msg = self.latest
-        if msg is not None and msg.xy_valid and msg.z_valid:
-            self.get_logger().info(
-                f'NED: x={msg.x:.2f}, y={msg.y:.2f}, z={msg.z:.2f} m')
-
-rclpy.init()
-node = PositionReader()
-try:
-    rclpy.spin(node)
-except KeyboardInterrupt:
-    pass
-finally:
-    node.destroy_node()
-    if rclpy.ok():
-        rclpy.shutdown()
-PY
-```
-
-### 能否用自己写的 ROS 节点控制
-
-**可以，GanYu 控制器和键盘客户端本身就是 ROS 2 节点。**
-当前使用 `px4_msgs + uXRCE-DDS`，无需再启动 MAVROS；也没有默认接收 `/cmd_vel` 的转换节点。
-自己的 C++/Python 节点可订阅上述状态，再发布以下输入：
-
-- `/px4_1/fmu/in/offboard_control_mode`（`OffboardControlMode`）：选择位置、速度、姿态等控制层级，
-  持续提供外部控制心跳。
-- `/px4_1/fmu/in/trajectory_setpoint`（`TrajectorySetpoint`）：发送本地 NED 位置/速度/加速度与偏航目标。
-  例如位置模式使用 `position=true`；纯速度模式使用 `position=false, velocity=true`，
-  并将 `TrajectorySetpoint.position` 的三个分量设为 `NaN`，避免仍被位置目标接管。
-  其他不使用的设定值也按接口语义设为 `NaN`，不能把全零初始化理解为“忽略该字段”。
-- `/px4_1/fmu/in/vehicle_command`（`VehicleCommand`）：请求切换 Offboard、解锁、降落等动作，
-  并订阅 `vehicle_command_ack` 和状态消息确认结果。
-- `/px4_1/fmu/in/vehicle_rates_setpoint`（`VehicleRatesSetpoint`）：角速度和机体系推力输入，
-  与 `OffboardControlMode.body_rate=true` 配合；GanYu 当前使用这条控制路径。
-
-节点应使用定时器持续发送心跳和设定值（例如 10–50 Hz），在请求 Offboard/解锁前先提供
-超过 1 秒的心跳；PX4 要求心跳频率高于 2 Hz，并要求对应层级的状态估计有效。
-心跳停止后会触发 `COM_OF_LOSS_T` 等参数规定的保护行为。消息 `timestamp` 使用微秒，
-本仓库 C++ 发布代码采用 `now().nanoseconds() / 1000`。模式和坐标要求见官方
-[Offboard 模式](https://docs.px4.io/v1.16/zh/flight_modes/offboard)及
-[ROS 2 Offboard 示例](https://docs.px4.io/v1.16/zh/ros2/offboard_control)。
-
-当前单机的 `VehicleCommand.target_system=2`、`target_component=1`、`from_external=true`。
-后续若扩展其他实例，应同时匹配话题命名空间和命令目标 ID。
-同一架飞机应由一个设定值来源控制；接入新节点时明确它与 GanYu 的控制权关系。
-
-<a id="official-docs"></a>
-
 ## 中文官方文档学习路线
 
 本环境固定使用 PX4 v1.16.0，建议先读 **v1.16 中文站**，避免照搬 `main` 或其他版本的
@@ -1096,10 +914,3 @@ PY
 
 建议按“启动单机环境 → 确认状态与相机数据 → 键盘验证 GanYu → 接入上层控制接口”的顺序进行，
 再扩展任务管理、航点执行、定位建图和规划绕障。
-
-## 保留资源与历史说明
-
-原 `grass_world.sdf`、`run_swarm.sh`、`uav_keyboard_control` 和其他上游实验包保留在工作空间中。
-原位置键盘与双机实验的命令、按键差异和退出行为见
-[上游历史实验流程](docs/legacy_upstream_workflows.md)。
-当前主 README 的启动步骤使用一架无人机、Walls 场景和 GanYu 控制器。
