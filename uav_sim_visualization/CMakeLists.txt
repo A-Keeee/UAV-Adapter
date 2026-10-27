@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.16)
+project(uav_sim_visualization)
+find_package(ament_cmake REQUIRED)
+install(PROGRAMS scripts/sensor_frames.py DESTINATION lib/${PROJECT_NAME} RENAME sensor_frames)
+install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
+install(FILES README.md DESTINATION share/${PROJECT_NAME})
+ament_package()

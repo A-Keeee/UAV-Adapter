@@ -1,77 +1,68 @@
-# FPV-Intercept
-### 基于视觉伺服的自主拦截无人机系统（PX4 / ROS 2）
+# Gazebo 单机无人机仿真与控制验证平台
 
-<div align="center">
+基于 ROS 2 Humble、PX4 SITL 和 Gazebo Harmonic，面向终端控制接口适配、
+自定义无人机控制器接入以及单机飞行任务验证。
 
+## 项目来源
 
-</div>
-
-<div align="center">
-
-
-</div>
-
-## 项目来源与原作者说明
-
-本项目基于 [Eaglewzw（Verse）](https://github.com/Eaglewzw) 的
+本项目在 [Eaglewzw（Verse）](https://github.com/Eaglewzw) 的
 [Autonomous-Intercept-Drone](https://github.com/Eaglewzw/Autonomous-Intercept-Drone)
-进行本机环境适配与修改，感谢原作者及贡献者的项目实现与资料分享。
-以下引用原项目 README 中的说明：
-
-> 本项目是一个面向自主无人机拦截任务的实验验证平台，集成了视觉感知、目标检测、比例导引（PNG）算法及飞行控制方法。该项目旨在为无人机自主拦截、制导算法研究及视觉伺服控制提供一套完整的仿真参考方案，适用于学习与学术研究。
->
-> —— [原作者项目说明（中文 README）](https://github.com/Eaglewzw/Autonomous-Intercept-Drone/blob/main/README.zh-CN.md)
-
-本文中的原项目介绍、算法说明及演示资料引用自上游仓库；本机安装配置、
-PX4 / ROS 2 接口适配、一键启动与就绪检查等内容为当前版本的补充。
-
----
+基础上进行本机环境适配与开发，保留原作者署名及上游代码来源。
+原项目名称为 FPV-Intercept；本工作空间按照下述单机仿真与控制验证目标继续开发。
 
 ## 项目简介
 
-当前工作空间为 `/home/ake/SJTU/适配终端/gazebo_sim`（原项目名 FPV-Intercept），
-保留 PX4 / ROS 2 视觉制导与双机仿真代码，并新增 Walls 单机场景和 GanYu 键盘控制入口。
-原训练流程还涉及独立的 `End2End-FPVIntercept` 项目；当前同级目录没有附带该项目，
-训练及模型部署需另行准备对应代码。
+当前工作空间为 `/home/ake/SJTU/适配终端/gazebo_sim`。
+项目用于在可重复的仿真环境中，打通“状态反馈 → 上层指令/参考轨迹 → 自定义控制器
+→ PX4 执行 → Gazebo 运动”的闭环，为后续机载终端与地面站控制接口提供验证基础。
 
-该系统在 ROS 2 环境下开发，结合 PX4 固件与 Gazebo 仿真器，实现了从目标发现到仿真拦截的全链路闭环。主要功能包括：
+当前已经接入的功能包括：
 
-*   **视觉目标检测**：利用训练的 YOLO 模型和跟踪模型（LightTrack）实时识别并跟踪视场内的无人机目标。
-*   **比例导引制导**：基于比例导引律（Proportional Navigation Guidance, PNG）生成拦截轨迹，实现对动态目标的精确前置拦截。
-*   **仿真验证体系**：基于 PX4 软件在环（SITL）搭建，支持在 Gazebo 环境中进行算法的离线验证与参数调优。
-*   **数据分析工具**：内置运动学与视觉指标记录脚本，用于定量评估制导律精度与视觉追踪稳定性。
+- **单机仿真环境**：Walls 障碍场景、独立 PX4 实例和仿真运行记录，提供原 `x500_depth`
+  与新增的相机 + MID-360 机型 `x500_mid360`。
+- **自定义控制器**：从本机 `sz_indoor_transport` 移植 `QuadrotorControllerGanYu`，
+  根据位置、速度及姿态反馈计算总推力和角速度，使用 PX4 角速度内环执行。
+- **键盘飞行操作**：按键触发起飞、空间位置目标调整、悬停与主动降落。
+- **状态与传感器接口**：PX4 里程计、位置有效性、飞行状态、相机图像、相机内参和仿真时钟。
+- **RViz2 显示**：同时显示 RGB 相机图像和 MID-360 仿真点云，并发布 ENU/FLU 可视化 TF。
+- **日志与检查**：场景/数据就绪检查、控制状态和调试话题、PX4 ULog、参考跟踪测试记录。
 
----
+后续开发方向是终端任务管理、航点任务、规划绕飞和地面站控制接口。
+这些是后续目标，当前没有实现激光建图、自动避障或完整任务上传协议。
+仓库内原有双机、视觉和制导代码作为历史资源保留，使用说明单独放在
+[上游历史实验流程](docs/legacy_upstream_workflows.md)，不作为当前单机工作的启动步骤。
 
 阅读入口：
 
-- [安装与编译](#快速上手)
-- [当前单机入口：Walls 场景 + GanYu 键盘控制](#ganyu-quickstart)
+- [环境依赖与编译](#快速上手)
+- [方式一：使用现有脚本启动单机场景和键盘控制](#ganyu-quickstart)
+- [方式二：逐项手动启动全部组件](#manual-start)
+- [相机 + MID-360 新模型与 RViz2 显示](#rviz-sensors)
 - [GanYu 按键、坐标和参考轨迹](#ganyu-keys)
 - [GanYu 输入输出、移植差异和参数](#ganyu-controller)
-- [删除自动降落条件后的实际行为](#ganyu-land-policy)
-- [GanYu 数据接口、日志与问题排查](#ganyu-topics)
-- [Walls 场景的来源与几何布局](assets/gazebo_world/README.md)
+- [当前降落行为与保留的检查](#ganyu-land-policy)
+- [GanYu 接口、日志与问题排查](#ganyu-topics)
+- [仿真环境组成与 PX4 目录](#simulation-architecture)
+- [飞行控制链路](#flight-controller)
+- [数据话题、订阅示例和控制接口](#vehicle-data)
+- [Walls 场景几何布局](assets/gazebo_world/README.md)
 - [GanYu 功能包说明](uav_ganyu_control/README.md)
-- [原有 uav_keyboard_control 位置控制流程](#keyboard-control)
-- [仿真环境组成与 PX4-Autopilot 目录](#simulation-architecture)
-- [无人机使用的控制器](#flight-controller)
-- [数据话题、订阅示例和 ROS 2 控制接口](#vehicle-data)
-- [中文官方文档学习路线](#official-docs)
+- [官方文档学习路线](#official-docs)
 
 ## 快速上手
 
 ### 1. 环境依赖
 
-*   **ROS 2 Version**: Humble
-*   **Gazebo**: Gazebo Harmonic（gz-sim 8；本机新场景验证版本为 8.15.0）
-*   **PX4 Firmware**: v1.16 (**Micro-XRCE-DDS-Agent**版本推荐v2.4.x)
-*   **地面站**: 原双机流程使用 QGroundControl 5.0.8；新 GanYu 客户端也可提供本机仿真地面站心跳
-*   **Dependencies**: OpenCV, onnx, colcon
+- **ROS 2**：Humble。
+- **Gazebo**：Harmonic（gz-sim 8；已有本机场景验证版本为 8.15.0）。
+- **PX4**：v1.16.0，使用已有 `px4_sitl_default` 构建。
+- **Micro-XRCE-DDS-Agent**：本机使用 v2.4.3，监听 UDP 8888。
+- **编译工具**：C++17、CMake、colcon、Eigen3。
+- **地面站连接**：GanYu 客户端可提供本机仿真心跳，也可连接 QGroundControl。
 
-新单机场景和 GanYu 还用到 `ros_gz_bridge`、Eigen3、`rclpy`、`px4_msgs`、
+单机场景和 GanYu 还用到 `ros_gz_bridge`、Eigen3、`rclpy`、`px4_msgs`、
 `rosgraph_msgs`、`std_msgs`，以及系统 Python 中的 Pillow、pymavlink。
-两个新入口会加载 ROS 2 和本工作空间环境，场景入口还会把 `~/.local/bin` 加入搜索路径。
+场景、键盘和可视化入口会加载 ROS 2 和本工作空间环境，场景入口还会把 `~/.local/bin` 加入搜索路径。
 直接执行 `ros2` 查看数据时，需要在该终端自行加载环境。
 
 ### 2. 编译项目
@@ -96,7 +87,7 @@ colcon build --symlink-install --packages-up-to uav_ganyu_control \
 source install/setup.bash
 ```
 
-原视觉/制导功能需要对应的完整依赖；全量构建命令仍为：
+如需同时构建仓库保留的其他实验包，应准备它们各自的额外依赖；全量构建命令为：
 
 ```bash
 # 在本仓库根目录（即工作空间）编译
@@ -106,16 +97,17 @@ source install/setup.bash
 ```
 
 修改 C++ 后需要重新编译并重新启动控制器进程；已运行的进程不会自动载入新二进制。
-下面先介绍当前单机入口，原有双机和位置键盘流程保留在后面的章节。
+下文先给出脚本启动方式，再给出不依赖启动脚本的逐项手动方式，两者使用同一套单机配置。
 
 <a id="ganyu-quickstart"></a>
 
-### 3. 当前单机入口：Walls 场景 + GanYu 键盘控制
+### 3. 方式一：使用脚本启动 Walls 场景与 GanYu 键盘控制
 
 当前实现包含一架 `x500_depth_1`、带碰撞体的四面障碍墙、RGB 相机数据、PX4 状态反馈，
 以及从 `sz_indoor_transport` 移植的 `QuadrotorControllerGanYu`。
-MID-360、激光点云桥接、地图构建、自动规划绕障和完整任务/地面站协议尚未接入。
-启动该入口不会启动目标机、视觉检测或 RL 制导节点。
+默认入口继续使用原相机模型；增加 `--mid360` 可选用带 MID-360 的新模型，见后面的 RViz2 章节。
+地图构建、自动规划绕障和完整任务/地面站协议尚未接入。
+该入口运行当前单机状态反馈、传感器和键盘控制链路。
 
 #### 3.1 终端 1：启动场景
 
@@ -131,7 +123,7 @@ cd /home/ake/SJTU/适配终端/gazebo_sim
 - 世界名称 `walls_demo`；无人机在 Gazebo ENU 原点 `(0, 0, 0)` 生成。
 - 机型 `gz_x500_depth`，`PX4_SYS_AUTOSTART=4002`，PX4 实例编号 `1`。
 - ROS 命名空间 `/px4_1`，命令目标系统 ID `2`；新场景没有 `/px4_2`。
-- 场景沿用已有的 x500 相机模型，本步骤未更换机体或增加雷达。
+- 不加 `--mid360` 时沿用原 x500 相机模型；`--mid360` 才加载新增雷达和相应桥接。
 - 新入口显式使用 `EKF2_HGT_REF=1`，即 GPS 高度参考；旧入口的设置仍保留在原脚本中。
 - PX4 工作目录、参数和 ULog 按次保存到 `log/obstacle_scene/<时间>_<后缀>/px4/`。
 
@@ -374,7 +366,7 @@ GanYu 使用的 PX4 输出包括 `/px4_1/fmu/out/` 下的
 17～19 积分、20～22 当前位置、23～25 当前速度。
 这些接口可供后续上层软件适配；当前未实现 `MissionGoal`、任务上传或独立网络地面站 API。
 
-在另一个终端查看状态和日志：
+在另一个终端查看状态和日志。下面两个日志路径对应脚本启动；手动启动的日志路径见第 4.10 节：
 
 ```bash
 cd /home/ake/SJTU/适配终端/gazebo_sim
@@ -390,7 +382,8 @@ tail -n 80 log/obstacle_scene/latest/px4.log
 ```
 
 新场景还桥接 `/clock`、`/camera/image`、`/camera/camera_info`，本机验证 RGB 为 1920×1080。
-没有桥接激光点云或深度图。重新检查场景时，可在上述已加载环境的终端执行：
+默认入口没有点云，`--mid360` 入口额外桥接 `/lidar/points`；当前没有额外桥接深度图。
+重新检查默认场景时，可在上述已加载环境的终端执行：
 
 ```bash
 /usr/bin/python3 scripts/check_obstacle_scene.py --output log/obstacle_scene/latest
@@ -424,316 +417,482 @@ tail -n 80 log/obstacle_scene/latest/px4.log
 时钟跳变、数值异常不发 LAND，以及主动降落仍有效；该回归使用模拟 PX4 消息，
 不等同于新一轮 Gazebo 动力学试飞。
 
-<a id="keyboard-control"></a>
+<a id="manual-start"></a>
 
-### 4. 原有 uav_keyboard_control 位置键盘流程
+### 4. 不使用启动脚本，逐项手动启动
 
-本节是保留的旧节点，其按键方向、默认高度和退出行为与 GanYu 不同。
-使用上一节 GanYu 时，不要同时启动本节的控制节点。
+本节不执行 `run_obstacle_scene.sh`、`run_ganyu_keyboard.sh` 或 `run_swarm.sh`，
+而是逐个启动同一套组件，使用相同的机型、实例、话题和控制参数。
+先完成前面的编译步骤，并结束其他占用同一世界、PX4 实例或端口的仿真会话。
+脚本方式与手动方式选择一套运行，不要叠加启动。
 
-该包的可执行文件是 `uav_keyboard_control`，ROS 节点名是
-`/drone_keyboard_control`，实现见 [uav_keyboard_control/src/main.cpp](uav_keyboard_control/src/main.cpp)。
-它通过 PX4 **Offboard 位置控制**操作第一架飞机 `/px4_1`，默认不控制 `/px4_2`。
+整体顺序为：
 
-#### 启动顺序
-
-1. **终端 1：只启动仿真底座。** `setup_workspace.sh` 已复制资源；若尚未复制，先执行
-   下列两个 `cp`。修改本仓库的脚本或世界文件后，也要重新复制。
-
-   ```bash
-   cd /home/ake/SJTU/适配终端/gazebo_sim
-   cp ./run_swarm.sh ~/PX4-Autopilot/run_swarm.sh
-   cp ./assets/gazebo_world/grass_world.sdf ~/PX4-Autopilot/Tools/simulation/gz/worlds/
-   cd ~/PX4-Autopilot
-   bash ./run_swarm.sh
-   ```
-
-   等待脚本提示全部就绪，保持这个终端运行。脚本会生成两架飞机，第二架可以留在地面。
-   只启动仿真底座，不同时启动目标运动、视觉或 RL 控制节点。
-   当前工作空间没有提供原项目的 `start.sh` 一键拦截入口。
-
-2. **终端 2：启动 QGroundControl。** 等待地面站显示两架飞机连接，并检查预飞提示。
-
-   ```bash
-   ~/Applications/QGroundControl-v5.0.8-x86_64.AppImage
-   ```
-
-3. **终端 3：启动键盘节点。** 保持该终端获得键盘焦点，使用小写字母，无需按回车。
-   应在真实交互终端运行，不要把标准输入重定向到文件或后台运行。
-
-   ```bash
-   cd /home/ake/SJTU/适配终端/gazebo_sim
-   source /opt/ros/humble/setup.bash
-   source install/setup.bash
-   ros2 run uav_keyboard_control uav_keyboard_control
-   ```
-
-   节点启动后立即持续请求 **进入 Offboard 和解锁**，同时发送位置目标
-   `(x, y, z) = (0, 0, -5)`、偏航角 `yaw = -3.14 rad`。
-   请求被 PX4 接受后，飞机会自动飞向本地原点上方约 5 m 的位置，无需另按起飞键。
-   日志 `Arm command send` 只表示发送了请求，是否成功需查看地面站或状态话题。
-
-#### 按键含义：以当前源码和 NED 坐标为准
-
-位置指令采用 PX4 本地 **NED** 坐标：`x` 向北、`y` 向东、`z` 向下，单位为米。
-这些方向相对于本地世界坐标，而不是机头或 Gazebo 观察相机的方向。
-每读取一次按键，目标位置对应分量变化 **0.1 m**：
-
-- `w`：`x += 0.1`，向北移动目标点；同时将目标偏航设为 `-3.14 rad`。
-- `s`：`x -= 0.1`，向南移动目标点；同时将目标偏航设为 `-3.14 rad`。
-- `a`：`y += 0.1`，向东移动目标点。
-- `d`：`y -= 0.1`，向西移动目标点。
-- `q`：`z += 0.1`，目标点**下降** 0.1 m。
-- `e`：`z -= 0.1`，目标点**上升** 0.1 m。
-
-**源码中 `q/e` 的 `Moving Up/Down` 日志与实际升降相反，以上按坐标值解释。**
-默认 `yaw ≈ -π` 时机头朝南，因此日志中的 Forward/Left 也不能作为机体方向解释。
-例如，从初始设定值连续按 10 次 `w`，目标变为 `(1, 0, -5)`；再按 5 次 `e`，
-目标变为 `(1, 0, -5.5)`。长按依赖操作系统的按键重复；松开后继续保持最后目标点。
-当前节点没有独立的偏航调节键、暂停键或自动降落键。
-
-#### 退出与当前实现限制
-
-- `x` 只退出键盘读取循环，**后台线程仍会发送 Offboard、解锁和位置指令**，不能用它结束控制。
-  结束试验使用键盘终端的 `Ctrl+C`，确认进程退出；若终端回显异常，可执行 `stty sane`。
-  节点没有完善的线程退出清理，退出时可能出现 `terminate` 报错。
-- 停止节点不会发送降落指令。停止后 PX4 会按 Offboard 丢失保护参数处理；需要降落时，
-  停止键盘节点后通过 QGroundControl 对应飞机选择降落。也可以在仿真终端按 `Ctrl+C`
-  结束整个场景，下一次启动重新试验。持续运行键盘节点时，它会反复请求 Offboard 和解锁。
-- 当前控制循环实际写的是 `sleep_for(microseconds(10))`，不是注释中的 100 ms，
-  会高频发送控制和解锁请求；它是一个基础示例，尚未实现按状态确认后停止重发的状态机。
-- 当前状态订阅仍使用旧话题 `/px4_1/fmu/out/vehicle_status` 和默认可靠 QoS，
-  且构造函数被键盘循环阻塞，正常键盘操作期间尚未进入 `rclcpp::spin()`。
-  因此不要依赖它的状态回调判断是否解锁；本机 PX4 v1.16 的实际状态话题是
-  `/px4_1/fmu/out/vehicle_status_v1`，可用下面的命令独立确认。
-- 同一架飞机一次只运行一个控制节点。不要与 `uav_vehicle_controller`、
-  `uav_png_intercept`、`uav_vision_png`、`uav_rl_guidance` 或 `uav_ibvs_control` 同时控制 `/px4_1`。
-  其中 `uav_vehicle_controller` 是另一个速度控制示例，与此包的位置控制按键含义不同。
-
-```bash
-# 另开终端，在本仓库根目录加载 ROS 2 和工作空间。
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 topic echo /px4_1/fmu/out/vehicle_status_v1 \
-  px4_msgs/msg/VehicleStatus --qos-reliability best_effort --once
-ros2 topic echo /px4_1/fmu/out/vehicle_local_position \
-  px4_msgs/msg/VehicleLocalPosition --qos-reliability best_effort --once
+```text
+Agent → Gazebo 服务端 → Gazebo GUI（可选）→ PX4
+  → 相机/时钟桥接 → 数据检查 → GanYu 控制节点 → 键盘客户端 → 按 t 起飞
 ```
 
-解锁状态应为 `arming_state: 2`（`ARMING_STATE_ARMED`），Offboard 应为
-`nav_state: 14`（`NAVIGATION_STATE_OFFBOARD`）。若未起飞，先检查 QGC 连接、预飞错误、
-本地位置/速度的有效标志，以及 `~/PX4-Autopilot/drone1.log`，不要只看节点的发送日志。
+各长期运行的组件分别占用一个前台终端，保持它们运行，再打开下一个终端。
+数据检查结束后，可以复用该终端启动控制器；带 GUI 时共需 7 个长期运行的终端。
+手动方式不提供脚本中的重复运行锁和统一清理，各组件由你启动和结束；同一架飞机只保留一套控制节点。
 
-### 5. 原有双机自动拦截流程
+#### 4.1 每个新终端先加载公共环境
 
-以下流程依赖完整视觉/推理环境，独立于前面的 Walls + GanYu 单机入口。
-每个直接执行 `ros2 run` 的终端都应先加载 `/opt/ros/humble/setup.bash` 和本仓库 `install/setup.bash`。
+**以下每个步骤使用的新终端，都先执行这段命令，然后再执行该步骤的命令。**
+终端之间不会自动共享后来设置的变量，因此后面共享运行目录采用文件系统中的 `latest` 链接。
 
-0. **启动仿真环境**:
-   在本仓库根目录执行，启动前将原有双机仿真资源复制到 PX4-Autopilot 目录下：
+```bash
+cd /home/ake/SJTU/适配终端/gazebo_sim
+export PATH="$HOME/.local/bin:$PATH"
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+source "$HOME/PX4-Autopilot/build/px4_sitl_default/rootfs/gz_env.sh"
+```
 
-   ```bash
-   # 步骤1: 将本仓库的 run_swarm.sh 复制到 PX4-Autopilot 根目录（若尚未复制）
-   cp ./run_swarm.sh ~/PX4-Autopilot/
+前两份 setup 文件加载 ROS 2 及当前工作空间；`gz_env.sh` 加载 PX4 模型路径、Gazebo 插件路径和服务端配置。
+如果 PX4 放在其他目录，本节所有 `~/PX4-Autopilot` 路径应一起修改。
+所有组件应使用一致的 ROS 通信域和 Gazebo partition；没有自行设置这些变量时使用默认配置即可。
 
-   # 步骤2: 将自定义世界文件复制到 PX4 Gazebo 世界目录
-   cp ./assets/gazebo_world/grass_world.sdf ~/PX4-Autopilot/Tools/simulation/gz/worlds/
-   ```
+可先在准备终端确认命令和程序存在：
 
-   > 首次使用或修改脚本/地图后复制；资源未变化时，之后直接在 PX4-Autopilot 目录启动：
-   ```bash
-   cd ~/PX4-Autopilot
-   ./run_swarm.sh
-   ```
+```bash
+command -v gz MicroXRCEAgent ros2
+test -x "$HOME/PX4-Autopilot/build/px4_sitl_default/bin/px4"
+ros2 pkg executables uav_ganyu_control
+ss -lunp 'sport = :8888'
+```
 
-   该脚本会自动启动 Gazebo 仿真服务器、两架无人机（px4_1 拦截机 + px4_2 目标机）、MicroXRCEAgent 以及相机话题桥接。
-   启动和退出时，会额外按完整命令行清理当前用户的 `gz sim` 服务端和图形界面，
-   避免系统进程名为 `ruby` 而被原来的 `killall` 漏掉。启动流程保持原样，
-   不检查 `px4_msgs`，无需为启动此脚本额外加载本工作空间。
+GanYu 可执行列表应包含 `ganyu_controller` 和 `ganyu_keyboard`。
+如果 UDP 8888 已被确认可复用的 Agent 占用，保留它并跳过下面的 Agent 启动；
+如果是已经结束的旧仿真留下的进程，先确认归属，再结束对应进程。
 
-   **启动目标节点前，打开 QGroundControl 并等待两架飞机通过 UDP 14550 自动连接。**
-   本机安装位置为：
+#### 4.2 终端 1：启动 MicroXRCEAgent
 
-   ```bash
-   ~/Applications/QGroundControl-v5.0.8-x86_64.AppImage
-   ```
+执行公共环境命令后运行：
 
-   Ubuntu 22.04 使用 [QGroundControl 5.0 系列](https://docs.qgroundcontrol.com/Stable_V5.0/en/qgc-user-guide/getting_started/download_and_install.html)。
-   当前 PX4 配置要求地面站连接；否则 `drone2.log` 会报告
-   `Preflight Fail: No connection to the ground control station` 并拒绝解锁。
-   `Arm command sent` 仅表示目标节点发送了请求。目标节点仅请求一次解锁，
-   若连接地面站前已经启动过该节点，连接成功后应在该节点终端按 Ctrl+C 并重新运行。
+```bash
+MicroXRCEAgent udp4 -p 8888
+```
+
+Agent 保持前台运行，监听 PX4 的 UDP 8888 连接。PX4 尚未启动时，没有客户端连接是正常现象。
+后面 PX4 接入后，应能看到客户端及 publisher/subscriber 等实体创建的日志。
+同一个端口只启动一个 Agent。
+
+#### 4.3 终端 2：启动 Gazebo 服务端和 Walls 世界
+
+执行公共环境命令后运行：
+
+```bash
+gz sim -r -s -v 3 "$PWD/assets/gazebo_world/walls_demo.sdf"
+```
+
+`-s` 启动服务端，`-r` 让仿真直接运行。此时世界中已有地面和四面墙；
+无人机要到后面的 PX4 步骤才会生成，因此暂时看不到飞机是正常的。
+
+没有桌面显示或使用无界面渲染时，将这一条替换为：
+
+```bash
+gz sim -r -s --headless-rendering -v 3 "$PWD/assets/gazebo_world/walls_demo.sdf"
+```
+
+两条服务端命令只选一条执行。无界面方式仍需要相机渲染，后面的图像检查也会继续使用。
+
+#### 4.4 终端 3：启动 Gazebo GUI，可选
+
+执行公共环境命令后运行：
+
+```bash
+gz sim -g --gui-config "$PWD/assets/gazebo_world/walls_demo.gui.config"
+```
+
+GUI 连接已经运行的服务端，使用本项目的俯瞰视角配置。
+如果只做无界面仿真，可以跳过整个步骤，不影响 PX4、控制器和 ROS 数据链路。
+
+#### 4.5 终端 4：启动单个 PX4 SITL 实例
+
+执行公共环境命令后，创建本轮独立工作目录并启动 PX4：
+
+```bash
+px4_dir="$HOME/PX4-Autopilot"
+mkdir -p "$PWD/log/manual_scene"
+manual_run_dir=$(mktemp -d "$PWD/log/manual_scene/$(date +%Y%m%d_%H%M%S)_XXXX")
+mkdir "$manual_run_dir/px4"
+ln -sfn "$manual_run_dir" "$PWD/log/manual_scene/latest"
+printf '本轮手动运行目录：%s\n' "$manual_run_dir"
+
+env PX4_GZ_STANDALONE=1 \
+  PX4_GZ_WORLD=walls_demo \
+  PX4_SYS_AUTOSTART=4002 \
+  PX4_SIM_MODEL=gz_x500_depth \
+  PX4_GZ_MODEL_POSE=0,0,0 \
+  PX4_PARAM_EKF2_HGT_REF=1 \
+  "$px4_dir/build/px4_sitl_default/bin/px4" \
+  -d -i 1 -w "$manual_run_dir/px4" \
+  "$px4_dir/build/px4_sitl_default/etc"
+```
+
+这里各参数的作用为：
+
+- `PX4_GZ_STANDALONE=1`：连接已启动的 Gazebo，不再由 PX4 额外启动世界。
+- `PX4_GZ_WORLD=walls_demo`：匹配世界名；它是 SDF 中的世界名称，不是完整文件路径。
+- `PX4_SYS_AUTOSTART=4002` 与 `PX4_SIM_MODEL=gz_x500_depth`：选择当前带相机的 x500 模型。
+- `PX4_GZ_MODEL_POSE=0,0,0`：模型在 Gazebo ENU 世界原点生成。
+- `PX4_PARAM_EKF2_HGT_REF=1`：与现有单机入口一致，使用 GPS 高度参考。
+- `-i 1`：PX4 实例编号为 1，对应 `/px4_1`，当前默认命令目标系统 ID 为 2。
+- `-w`：本轮 PX4 参数、dataman 和 ULog 使用独立目录，不复用旧运行数据。
+
+启动后 GUI 中应出现 `x500_depth_1`。保持此终端运行；预检是否通过要结合状态消息判断，
+没有地面站心跳时可以先继续后面的步骤，键盘客户端启动后会尝试提供心跳。
+此命令本身不会解锁或起飞。
+
+#### 4.6 终端 5：桥接仿真时钟、RGB 图像和相机内参
+
+执行公共环境命令后运行：
+
+```bash
+bridge_yaml="$PWD/log/manual_scene/latest/bridge.yaml"
+cat > "$bridge_yaml" <<'YAML'
+- ros_topic_name: /clock
+  gz_topic_name: /world/walls_demo/clock
+  ros_type_name: rosgraph_msgs/msg/Clock
+  gz_type_name: gz.msgs.Clock
+  direction: GZ_TO_ROS
+- ros_topic_name: /camera/image
+  gz_topic_name: /world/walls_demo/model/x500_depth_1/link/camera_link/sensor/IMX214/image
+  ros_type_name: sensor_msgs/msg/Image
+  gz_type_name: gz.msgs.Image
+  direction: GZ_TO_ROS
+- ros_topic_name: /camera/camera_info
+  gz_topic_name: /world/walls_demo/model/x500_depth_1/link/camera_link/sensor/IMX214/camera_info
+  ros_type_name: sensor_msgs/msg/CameraInfo
+  gz_type_name: gz.msgs.CameraInfo
+  direction: GZ_TO_ROS
+YAML
+
+ros2 run ros_gz_bridge parameter_bridge --ros-args \
+  -p "config_file:=$bridge_yaml"
+```
+
+该配置与场景启动脚本使用的三项桥接一致，方向均为 Gazebo 到 ROS。
+PX4 里程计、状态和控制命令通过 Agent 的 DDS 链路传输，不通过这份 YAML。
+若创建 YAML 时提示目录不存在，说明第 4.5 步的运行目录还没有创建成功。
+
+#### 4.7 数据检查：使用一个临时终端
+
+执行公共环境命令后，运行只读检查：
+
+```bash
+/usr/bin/python3 scripts/check_obstacle_scene.py \
+  --timeout 90 --output log/manual_scene/latest
+```
+
+这是数据检查工具，不会启动其他组件，也不会发送解锁或飞行指令。
+成功时输出 `passed: true`，并在本轮目录保存 `verification.json` 和 `camera.png`。
+检查覆盖四面墙、无人机实体、推进的仿真时间、有效位置/里程计、图像和相机内参。
+检查通过不等于 PX4 预检通过，二者分别记录。
+
+也可以用 ROS 命令逐项查看：
+
+```bash
+ros2 topic list
+ros2 topic echo /clock rosgraph_msgs/msg/Clock \
+  --qos-reliability best_effort --once
+ros2 topic echo /px4_1/fmu/out/vehicle_local_position \
+  px4_msgs/msg/VehicleLocalPosition --qos-reliability best_effort --once
+ros2 topic echo /px4_1/fmu/out/vehicle_status_v1 \
+  px4_msgs/msg/VehicleStatus --qos-reliability best_effort --once
+ros2 topic echo /camera/camera_info sensor_msgs/msg/CameraInfo \
+  --qos-reliability best_effort --once
+```
+
+其中位置应具有 `xy_valid: true`、`z_valid: true`，时钟应持续推进。
+起飞前通常仍是 `arming_state: 1`（未解锁）；按 `t` 后成功进入控制时应为
+`arming_state: 2`、`nav_state: 14`。
+检查失败时先查看对应组件的前台日志，再继续启动控制器。
+
+#### 4.8 终端 6：单独启动 GanYu 控制节点
+
+可以复用上一步检查终端；若新开终端，先执行公共环境命令。
+
+```bash
+ros2 run uav_ganyu_control ganyu_controller --ros-args \
+  -p px4_namespace:=/px4_1 -p target_system:=2 \
+  2>&1 | tee log/manual_scene/latest/ganyu_controller.log
+```
+
+该命令只启动控制器，没有启动键盘，也没有提供客户端地面站心跳。
+节点仍等待键盘指令，不会自行起飞。此终端的输出同时写入本轮控制日志。
+需要改变起飞高度或步长时，可以在命令的 `--ros-args` 参数部分追加
+`-p takeoff_height:=2.0 -p keyboard_step:=0.1`，其他参数见前面的 GanYu 参数说明。
+
+#### 4.9 终端 7：单独启动键盘客户端
+
+执行公共环境命令后运行：
+
+```bash
+ros2 run uav_ganyu_control ganyu_keyboard
+```
+
+在这个终端保持键盘焦点，看到反馈“就绪”后按 `t`，然后使用前文说明的移动、悬停和降落按键。
+默认客户端会发送本机 MAVLink 地面站心跳。如果已经使用 QGroundControl，
+可以将上一条命令替换为：
+
+```bash
+ros2 run uav_ganyu_control ganyu_keyboard --external-gcs
+```
+
+两条键盘命令只选一条。当前节点不会因为启动顺序本身自动起飞，必须由键盘发起 `t`。
+
+#### 4.10 手动启动时的退出和日志
+
+手动方式没有脚本统一管理进程，退出顺序也要手动完成：
+
+1. 在键盘终端按 `l` 降落，或按 `x` / `Ctrl+C` 请求降落并退出键盘。
+2. 确认节点回到 `IDLE` 且飞机未解锁后，在控制器终端按 `Ctrl+C`。
+3. 依次在桥接、PX4、GUI、Gazebo 服务端的终端按 `Ctrl+C`。
+4. 最后结束本次手动启动的 Agent；若 Agent 是复用的其他会话服务，按其原有用途保留。
+
+**手动启动时，退出键盘客户端不会自动结束另一个终端中的控制器。**
+这与 `run_ganyu_keyboard.sh` 统一启动、退出两个进程的行为不同。
+同样，关闭 GUI 不等于停止 Gazebo 服务端，退出 PX4 也不会替你结束独立启动的 Agent。
+
+手动运行的数据位于 `log/manual_scene/<时间>_<后缀>/`：
+
+- `px4/`：PX4 参数、dataman 和 ULog。
+- `bridge.yaml`：本轮桥接配置。
+- `verification.json`、`camera.png`：执行数据检查后生成的记录。
+- `ganyu_controller.log`：按第 4.8 步使用 `tee` 后保存的控制节点日志。
+
+`log/manual_scene/latest` 指向最近一轮手动目录；它与脚本方式的
+`log/obstacle_scene/latest`、`log/ganyu_control/latest` 分开使用。
+其他组件的日志默认显示在各自终端；本节不自动复制或清理旧日志。
 
 
-1. **启动目标机仿真**:
-   ```bash
-   # 默认圆周运动
-   ros2 run uav_target_sim uav_target_sim
+<a id="rviz-sensors"></a>
 
-   # 或通过参数选择运动模式和活动范围
-   ros2 run uav_target_sim uav_target_sim --ros-args -p motion_mode:=sinusoidal -p max_range:=10.0
+### 5. 相机 + MID-360 新模型与 RViz2
 
-   # 也可使用 launch 文件
-   ros2 launch uav_target_sim target_sim.launch.py motion_mode:=random_walk
-   ```
+新增 [x500_mid360 模型](assets/gazebo_models/x500_mid360/model.sdf)，包含原 x500 机架、
+OakD-Lite 相机和 265 g 的 MID-360 仿真负载。原 PX4 模型文件和默认相机入口保留。
+雷达安装在 `base_link` 上方 0.12 m，采用简化外壳几何，总质量约为 2.390307692 kg。
 
-   **支持的目标运动模式**：
+雷达后端为 [RGLGazeboPlugin](https://github.com/RobotecAI/RGLGazeboPlugin) 的 `Livox Mid360` 预设，
+使用 40 段交替扫描序列，10 Hz 更新。
+点云输出为标准 `sensor_msgs/msg/PointCloud2`，不包含 Livox 自定义消息、逐点时间戳或真实硬件网络包。
+当前设置的量程为 0.1～40 m；MID-360 的官方视场与质量资料见
+[Livox 规格](https://www.livoxtech.com/mid-360/specs)。仿真不等于完整的硬件误差和反射特性复现。
 
-   | 参数值 | 运动模式 | 运动学公式 | 特点 |
-   | :--- | :--- | :--- | :--- |
-   | `circle` | 匀速圆周 | R=5m, w=0.5rad/s | 默认模式，半径5m匀速圆周运动 |
-   | `sinusoidal` | 正弦机动 | a=0.5*sin(0.5t) m/s<sup>2</sup> | 前向匀速1m/s + 侧向正弦加速度，周期性规避 |
-   | `random_walk` | 随机游走 | v(t+dt) = v(t) + N(0, 0.2) | 速度随机扰动，限速3m/s，无规律逃逸 |
+#### 5.1 首次准备
 
-   > `max_range` 参数（默认10m）控制目标活动范围，防止目标飞出拦截机视野。
+本机 NVIDIA RTX 3060 可运行该后端。RGL 需要兼容的 NVIDIA RTX GPU 和驱动，
+依赖安装在用户目录，不替换系统库、CUDA、驱动或 PX4 源码。
 
-2. **启动视觉制导拦截**:
-   ```bash
-   # 推荐直接运行（使用 .hpp 中的默认参数）
-   ros2 run uav_vision_png uav_vision_png
+```bash
+cd /home/ake/SJTU/适配终端/gazebo_sim
+./scripts/setup_mid360_sim.sh
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+colcon build --symlink-install --packages-select uav_sim_visualization
+```
 
-   # 或通过 launch 文件加载 config/params.yaml 中的参数
-   ros2 launch uav_vision_png vision_png.launch.py
-   ```
+安装脚本下载固定版本的 Ubuntu 22 RGL 二进制和 MID-360 预设，验证 SHA-256，
+默认安装到 `~/.local/opt/gazebo_sim_mid360_rgl-v0.2.0`，可用 `MID360_RGL_DIR` 覆盖。
+重复运行会检查已有安装。原始来源、版本、扫描序列和 Apache 许可证随依赖保留。
 
-   > **参数配置说明**：`uav_vision_png` 节点的参数优先级为：
-   >   **launch 命令行 > params.yaml > .hpp 成员初始值**
-   >
-   > - 使用 `ros2 run` 直接启动：参数取 `.hpp` 中的默认值，**`params.yaml` 不会自动加载**，需手动传参 `--ros-args -p 参数名:=值`
-   > - 使用 `ros2 launch` 启动：launch 文件自动加载 `config/params.yaml`，YAML 中的值会覆盖 `.hpp` 默认值
-   > - 调试时可用 `ros2 param get /uav_vision_png <参数名>` 查看当前实际生效的值
-   > - 可调参数详见 `uav_vision_png/config/params.yaml`，含 PNG 增益、视场补偿、起飞高度等
+#### 5.2 使用脚本启动
 
-2-备. **启动 RL 学习制导拦截 (替代方案)** 🆕:
-   `uav_rl_guidance` 是基于强化学习（BC + PPO）训练的 GRU 策略制导节点，用于取代传统 PNG 算法。
-   它与 `uav_vision_png` 保持相同的话题接口、状态机和 CSV 统计格式，可无缝替换。
-   使用 ONNX Runtime 推理，零 PyTorch 依赖，纯 C++ 实现。
+终端 1：启动新机型和传感器链路，等待 `READY`：
 
-   ```bash
-   # 方式1：launch 启动（自动加载 config/params.yaml）
-   ros2 launch uav_rl_guidance rl_guidance.launch.py
+```bash
+cd /home/ake/SJTU/适配终端/gazebo_sim
+./run_obstacle_scene.sh --mid360
+```
 
-   # 方式2：直接运行（使用代码默认参数）
-   ros2 run uav_rl_guidance uav_rl_guidance
+这次生成的是 `x500_mid360_1`。入口在本轮日志目录生成添加了 RGL 管理插件的世界副本，
+继续使用原 Walls 的障碍几何和世界名称，不改写 `walls_demo.sdf`。
+`READY` 额外要求至少收到三帧点云且存在有效 XYZ 点。
 
-   # A/B 基线模式：全程使用内置 PNG，不加载策略模型（与 uav_vision_png 等价）
-   ros2 launch uav_rl_guidance rl_guidance.launch.py fallback_png:=true
+终端 2：打开相机与点云显示：
 
-   # 台架调试：跳过起飞，直接进入 SEARCHING
-   ros2 launch uav_rl_guidance rl_guidance.launch.py bench_test:=true
-   ```
+```bash
+cd /home/ake/SJTU/适配终端/gazebo_sim
+./run_rviz.sh
+```
 
-   > **架构说明**：RL 策略在 INTERCEPT 阶段输出速度指令；若策略出现异常（watchdog），自动回退到内置 PNG 控制器。
-   > 策略模型（ONNX `.onnx`）存放在 `uav_rl_guidance/models/` 下，
-   > 配套训练项目 `End2End-FPVIntercept` 需要单独准备，当前目录未附带；
-   > 其上游项目为 [AeroIntercept](https://github.com/Eaglewzw/AeroIntercept)。
-   > 当前节点使用 15 维观测的 GRU 策略，更新兼容的 `uav_rl_guidance/models/policy.pt` 后，
-   > 在本仓库根目录执行 `python3 uav_rl_guidance/src/export_onnx.py`；端到端图像策略需使用其对应的部署接口。
+RViz2 配置自动启用左侧 RGB 图像、右侧 PointCloud2 和机体坐标轴。
+点云按高度着色，固定坐标系为 `odom`，显示节点把 PX4 NED/FRD 里程计转换为 ENU/FLU：
 
-3. **启动视觉检测**:
-   ```bash
-   ros2 run uav_vision_dectect uav_vision_dectect
-   ```
+```text
+odom → base_link → mid360_link
+```
+
+`odom` 来自 PX4 本地估计坐标；它不是 Gazebo 真值或建图结果。
+该显示包不发送飞行控制命令，关闭 RViz2 不会关闭场景或控制器。
+图像使用 Image 显示插件，点云订阅 QoS 为 Best Effort。
+
+终端 3：需要键盘试飞时，按新负载质量启动已有控制器：
+
+```bash
+cd /home/ake/SJTU/适配终端/gazebo_sim
+./run_ganyu_keyboard.sh --ros-args -p mass:=2.390307692307692
+```
+
+随后按 `t` 起飞，按键与主动降落方式保持原样。这里通过已有 `mass` 参数匹配新模型，
+没有改动 GanYu 控制律、增益或之前删除的附加自动降落条件。
+
+#### 5.3 在逐项手动启动流程中使用新模型
+
+仍按第 4 节的组件顺序运行。先完成依赖安装；在 Gazebo 和 PX4 的终端执行完公共环境后，
+再加入以下环境变量，使 Gazebo 找到 RGL 和新模型：
+
+```bash
+rgl_dir="${MID360_RGL_DIR:-$HOME/.local/opt/gazebo_sim_mid360_rgl-v0.2.0}"
+export GZ_SIM_RESOURCE_PATH="$PWD/assets/gazebo_models:${GZ_SIM_RESOURCE_PATH:-}"
+export GZ_SIM_SYSTEM_PLUGIN_PATH="$rgl_dir/RGLServerPlugin:${GZ_SIM_SYSTEM_PLUGIN_PATH:-}"
+export RGL_PATTERNS_DIR="$rgl_dir/lidar_patterns"
+export PX4_GZ_MODELS="$PWD/assets/gazebo_models"
+```
+
+启动服务端前，生成添加 RGL 场景管理插件的世界副本，并替换第 4.3 节的服务端命令：
+
+```bash
+mkdir -p log/manual_mid360
+/usr/bin/python3 scripts/prepare_mid360_world.py \
+  --source assets/gazebo_world/walls_demo.sdf --output log/manual_mid360/world.sdf
+gz sim -r -s -v 3 "$PWD/log/manual_mid360/world.sdf"
+```
+
+GUI 和 Agent 的手动命令保持原样。第 4.5 节 PX4 命令中的
+`PX4_SIM_MODEL=gz_x500_depth` 改为 `PX4_SIM_MODEL=gz_x500_mid360`，其他实例、世界和参数不变。
+`PX4_GZ_MODELS` 应保持上面的新模型目录；原 PX4 模型仍可由 Gazebo 资源路径找到。
+
+在第 4.6 节创建 `bridge.yaml` 后、启动桥接之前，替换相机模型名称并追加雷达映射：
+
+```bash
+bridge_yaml="$PWD/log/manual_scene/latest/bridge.yaml"
+sed -i 's/x500_depth_1/x500_mid360_1/g' "$bridge_yaml"
+cat >> "$bridge_yaml" <<'YAML'
+- ros_topic_name: /lidar/points
+  gz_topic_name: /mid360/points
+  ros_type_name: sensor_msgs/msg/PointCloud2
+  gz_type_name: gz.msgs.PointCloudPacked
+  direction: GZ_TO_ROS
+YAML
+ros2 run ros_gz_bridge parameter_bridge --ros-args -p "config_file:=$bridge_yaml"
+```
+
+检查工具使用新模型名称，并要求点云：
+
+```bash
+/usr/bin/python3 scripts/check_obstacle_scene.py --timeout 90 \
+  --output log/manual_scene/latest --vehicle x500_mid360_1 --require-lidar
+```
+
+第 4.8 节控制器的 `--ros-args` 中追加 `-p mass:=2.390307692307692`。
+显示终端加载 ROS/工作空间环境后直接运行，不必使用显示启动脚本：
+
+```bash
+ros2 launch uav_sim_visualization sensors.launch.py
+```
+
+只发布可视化 TF、不打开 RViz2 时，使用 `rviz:=false`。
+
+#### 5.4 话题与常见显示问题
+
+- RGB 图像为 `/camera/image`，相机内参为 `/camera/camera_info`。
+- Gazebo 雷达输出 `/mid360/points`，桥接到 ROS `/lidar/points`，帧名 `mid360_link`。
+- 点云是相对于雷达的 XYZ；显示时通过 `odom → base_link → mid360_link` 变换。
+- 只有图像、没有点云：确认场景带 `--mid360` 启动，并查看 `gazebo.log` 是否成功加载
+  `Livox Mid360` 预设；原 `x500_depth` 本身没有雷达。
+- 提示找不到 `odom` 或 TF：先确认 PX4 里程计和 `/clock` 已输出，并且显示节点在运行。
+- 自行添加 Image / PointCloud2 时选择对应话题，QoS Reliability 设为 Best Effort；
+  Fixed Frame 设为 `odom`，并启动本包 TF 节点。
+- 修改显示配置后重新启动 `./run_rviz.sh`；配置位于
+  [sensors.rviz](uav_sim_visualization/config/sensors.rviz)。
+
+完整显示包说明见 [uav_sim_visualization/README.md](uav_sim_visualization/README.md)。
+
+#### 5.5 本机验证（2026-10-27）
+
+- `uav_sim_visualization` 编译、脚本语法和 ShellCheck 通过。
+- 原默认 `./run_obstacle_scene.sh --headless --check` 回归通过，仍生成 `x500_depth_1`，
+  位置、里程计、RGB 图像、相机内参与时钟检查成功。
+- 新机型场景检查通过，RGB 图像为 1920×1080；检查样本有 13304 个有效 XYZ 点，字段为
+  `x/y/z/intensity`。点数随视野、姿态及交替扫描帧变化。
+- 12 秒显示链路采样收到 314 帧图像、120 帧点云，点云按仿真时间计算为 10 Hz；
+  检查的 116 帧点云均能查询到消息时间对应的 `odom → mid360_link` TF。
+- 通过实际键盘客户端完成 `t` 起飞到 1.5 m、`w/d/e/s/a/q` 小步移动、空格悬停，
+  继续保持约 64 秒仿真时间后按 `l` 降落，确认落地上锁，再按 `x` 正常退出。
+  该轮基于 PX4 位置估计与参考轨迹的 RMSE 约 0.0144 m，最大误差约 0.0370 m，
+  最大机体倾角约 3.51°。这些是当前理想仿真的单次结果，不代表实机定位或飞行精度。
+- 本次没有验证持续长按、快速反向、激光建图或自动避障。
+
+场景数据记录在 `log/obstacle_scene/20261027_153112_GD8H/`；飞行采样与按键记录在
+`log/sensor_view_validation/low_mount_flight_retry/`，显示检查结果在
+`log/sensor_view_validation/viewer_check.json`。
 
 <a id="simulation-architecture"></a>
 
-## 仿真环境是如何搭建起来的
+## 仿真环境组成与 PX4 目录
 
-本项目采用 **SITL（Software In The Loop，软件在环）**：在电脑上运行 PX4 飞控程序，
-由 Gazebo 提供虚拟飞机、物理运动和传感器。本仓库提供外部 ROS 2 算法节点与启动脚本。
-环境中的各部分分工如下：
+本项目采用 SITL（软件在环）：PX4 飞控程序运行在电脑上，Gazebo 模拟飞机、物理运动和传感器，
+ROS 2 工作空间负责键盘/上层输入、自定义控制器、状态接口和记录。
+各部分的分工为：
 
-- **Gazebo Harmonic**：按入口加载 [grass_world.sdf](assets/gazebo_world/grass_world.sdf)
-  或 [walls_demo.sdf](assets/gazebo_world/walls_demo.sdf)，
-  模拟重力、碰撞、电机及 IMU、气压计、磁力计、GPS、相机等传感器。
-- **PX4-Autopilot v1.16.0**：每架飞机对应一个 PX4 SITL 进程，负责状态估计、
-  解锁/模式管理、飞行控制和失联保护，通过 PX4 自带的 `gz_bridge` 与 Gazebo 交互。
-- **MicroXRCEAgent v2.4.3**：本机监听 UDP 8888，与 PX4 内的 `uxrce_dds_client`
-  通信，将选定的 PX4 uORB 消息接入 ROS 2 DDS，供节点订阅或发布。
-- **ros_gz_bridge**：原双机入口桥接 `/camera/image`；新单机入口还桥接
-  `/camera/camera_info` 和 `/clock`。飞机状态和控制指令走上面的 DDS 链路。
-- **本仓库 ROS 2 节点**：原键盘节点发送位置目标，GanYu 节点计算总推力和角速度；
-  目标机节点生成运动轨迹，PNG、视觉制导或 RL 节点生成外部制导指令。
-- **QGroundControl / 本机 GCS 心跳**：经 MAVLink/UDP 14550 与 PX4 通信，
-  与 ROS 2 DDS 是两条链路。原双机流程连接 QGC；新 GanYu 流程可使用客户端内置心跳，
-  QGC 另提供状态、参数和地面站命令界面。
+- **Gazebo Harmonic**：加载 `walls_demo.sdf`，处理重力、碰撞、电机以及模拟传感器。
+- **PX4 SITL**：处理状态估计、解锁、飞行模式、角速度内环、控制分配和飞控自身保护。
+  通过 PX4 内部的 `gz_bridge` 与 Gazebo 通信。
+- **MicroXRCEAgent**：把 PX4 的选定 uORB 状态/输入接入 ROS 2 DDS；本机使用 UDP 8888。
+- **ros_gz_bridge**：桥接 `/clock`、`/camera/image` 和 `/camera/camera_info`。
+- **GanYu 控制节点**：接收反馈和位置参考，计算总推力及机体系角速度。
+- **键盘客户端**：生成操作指令、客户端存活消息和可选的 MAVLink 地面站心跳。
+- **QGroundControl**：可选的状态/参数查看及地面站操作界面，使用独立的 MAVLink 链路。
 
 ```mermaid
 flowchart LR
-    ROS[ROS 2 键盘 / 制导节点] -->|Offboard 模式与设定值| DDS[MicroXRCEAgent + PX4 uXRCE-DDS Client]
-    DDS -->|uORB 输入| PX4[PX4 SITL 飞控：估计与控制]
-    PX4 -->|uORB 状态输出| DDS
-    DDS -->|ROS 2 状态话题| ROS
-    PX4 -->|电机输出，经 gz_bridge| GZ[Gazebo：物理与传感器]
-    GZ -->|传感器数据，经 gz_bridge| PX4
-    GZ -->|图像，经 ros_gz_bridge| CAM["/camera/image"]
-    CAM --> VISION[视觉检测节点]
-    QGC[QGroundControl] <-->|MAVLink| PX4
+    KEY[键盘或上层输入] --> CTRL[GanYu 控制节点]
+    CTRL -->|角速度与推力| DDS[MicroXRCEAgent]
+    DDS --> PX4[PX4 SITL]
+    PX4 -->|状态反馈| DDS
+    DDS --> CTRL
+    PX4 -->|电机输出| GZ[Gazebo 物理与传感器]
+    GZ -->|模拟传感器| PX4
+    GZ --> BRIDGE[ros_gz_bridge]
+    BRIDGE -->|图像与内参| SENSOR[传感器查看和记录]
+    BRIDGE -->|仿真时钟| CTRL
+    QGC[QGroundControl 或客户端 GCS 心跳] <-->|MAVLink| PX4
 ```
 
-原双机流程的安装与启动分为三个阶段：
+### ROS 工作空间与 PX4 源码是两个目录
 
-1. [install_system_dependencies.sh](scripts/install_system_dependencies.sh) 安装系统编译依赖、
-   Gazebo Harmonic、适配 Humble 的 `ros_gzharmonic` 和视觉推理库。
-   脚本假定已有 `/opt/ros/humble`；它会替换旧 Gazebo/ros_gz 包，全量视觉环境还需满足
-   ONNX Runtime 的 CUDA 运行库依赖。
-2. [setup_workspace.sh](scripts/setup_workspace.sh) 下载固定版本的 PX4 及子模块、
-   编译安装 Agent、编译本工作空间的消息和算法节点、复制世界/启动脚本，
-   为 DDS 增加 `hover_thrust_estimate` 导出，最后构建 `px4_sitl_default`。
-3. [run_swarm.sh](run_swarm.sh) 启动 Agent，再启动带相机的 PX4 实例 1：
-   `PX4_SYS_AUTOSTART=4002`、`PX4_SIM_MODEL=gz_x500_depth`、`px4 -i 1`，
-   由它启动 `grass_world`；等待 15 秒并启动相机桥接后，再启动普通 x500 的实例 2：
-   `PX4_SYS_AUTOSTART=4001`、`PX4_SIM_MODEL=gz_x500`、`px4 -i 2`。
-   第二个实例设置 `PX4_GZ_STANDALONE=1`，连接同一个 Gazebo 世界。
+- `/home/ake/SJTU/适配终端/gazebo_sim`：本工作空间，包含 `uav_ganyu_control`、`px4_msgs`、
+  场景资源、启动入口和文档；`build/`、`install/`、`log/` 为构建或运行产物。
+- `~/PX4-Autopilot`：PX4 飞控源码和 SITL 构建，本工作空间不需要复制进该目录。
+- `~/PX4-Autopilot/build/px4_sitl_default/bin/px4`：飞控可执行文件。
+- `~/PX4-Autopilot/build/px4_sitl_default/rootfs/gz_env.sh`：模型、插件和服务端配置的环境设置。
+- `~/PX4-Autopilot/Tools/simulation/gz/`：PX4 Gazebo 模型和世界。
+- `~/PX4-Autopilot/ROMFS/px4fmu_common/`：飞控启动和机型配置。
+- `~/PX4-Autopilot/src/modules/`：状态估计、控制器、DDS 等模块源码。
 
-当前单机入口 [run_obstacle_scene.sh](run_obstacle_scene.sh) 则先用本仓库 SDF 启动 Gazebo，
-再以 `PX4_GZ_STANDALONE=1` 启动一个 4002 实例连接 `walls_demo`。
-它使用独立 PX4 工作目录和绝对资源路径，从工作空间直接启动即可；GanYu 由另一个入口单独启动。
+当前脚本和手动命令均通过绝对路径调用 PX4，并为每次运行指定工作目录。
+因此当前单机流程可以从本工作空间启动，无需切换到 PX4 源码根目录。
+Gazebo 模型资源由 `gz_env.sh` 指向 PX4 目录，当前地图直接读取本仓库的 SDF。
 
-脚本实际设置的 Gazebo 初始位置是第一架 `PX4_GZ_MODEL_POSE="0,0"`，
-第二架 `"20,0"`（Gazebo 世界的 x、y，单位 m）；脚本末尾摘要中的第二架 `(0,20)`
-与设置不一致，应以启动命令为准。这些生成位置不能直接当作各自 PX4 本地 NED 位置。
-新 Gazebo 的启动参数及多机方式可对照官方
-[Gazebo 仿真](https://docs.px4.io/v1.16/zh/sim_gazebo_gz/)和
-[多机仿真](https://docs.px4.io/v1.16/zh/sim_gazebo_gz/multi_vehicle_simulation)。
-
-### PX4-Autopilot 文件夹是什么，为什么要在里面启动
-
-`~/PX4-Autopilot` 是官方 [PX4/PX4-Autopilot](https://github.com/PX4/PX4-Autopilot/tree/v1.16.0)
-飞控源码仓库。本项目使用其中的 Linux SITL 构建；同一源码体系也能为真实飞控板编译固件。
-它与当前 ROS 2 工作空间是两个独立目录：
-
-- 本仓库：`uav_*` 为外部节点，`px4_msgs/msg/` 为 ROS 2 消息定义；
-  `build/`、`install/`、`log/` 是 colcon 产物。`px4_msgs` 本身不运行飞控。
-- `~/PX4-Autopilot/build/px4_sitl_default/bin/px4`：编译得到的飞控可执行程序。
-- `~/PX4-Autopilot/ROMFS/px4fmu_common/`：启动脚本和机型配置，包含 4001/4002 对应的 x500 配置。
-- `~/PX4-Autopilot/Tools/simulation/gz/`：Gazebo 模型、世界与配套资源。
-- `~/PX4-Autopilot/src/modules/`：状态估计器、控制器、DDS 客户端等飞控模块源码。
-
-**必须切换目录是当前 `run_swarm.sh` 的相对路径要求。** 它检查并执行
-`./build/px4_sitl_default/bin/px4`，日志也写在当前目录，所以只写
-`bash ~/PX4-Autopilot/run_swarm.sh` 并不会自动改变工作目录。
-在已加载 ROS 2 的终端，可以从任意目录这样启动原双机场景：
-
-```bash
-(cd ~/PX4-Autopilot && bash ./run_swarm.sh)
-```
-
-ROS 2 节点可在任意已加载工作空间环境的终端运行，无需放进 PX4 目录。
-当前工作空间没有 `env.sh` 或 `start.sh`；直接运行 ROS 命令时使用
-`source /opt/ros/humble/setup.bash` 和 `source install/setup.bash` 加载环境。
-新单机场景从工作空间运行 `./run_obstacle_scene.sh`，无需切换到 PX4 目录。
-官方常见命令 `make px4_sitl gz_x500` 是另一种单机入口，本项目脚本直接使用已有构建。
+已有 [install_system_dependencies.sh](scripts/install_system_dependencies.sh) 和
+[setup_workspace.sh](scripts/setup_workspace.sh) 保留了整套历史环境安装/构建流程，
+其中包含额外实验包的依赖和资源复制操作。
+已有本机环境下进行单机开发时，按前面的定向编译和启动步骤操作即可。
 
 <a id="flight-controller"></a>
 
 ## 仿真器中无人机的控制器是什么
 
-当前存在两条控制路径：原位置键盘/PNG/RL 使用 PX4 内部的相关位置、速度、姿态控制环；
-新增 GanYu 在 ROS 2 进程中根据位置反馈计算总推力和角速度，再使用 PX4 的角速度内环。
-Gazebo 在两种路径下都负责电机和机体的物理运动。
+当前使用 GanYu 在 ROS 2 进程中根据状态和参考轨迹计算总推力、角速度，
+PX4 保留角速度内环及控制分配，Gazebo 负责电机与机体运动。
+GanYu 输入输出和参数见[控制器说明](#ganyu-controller)。
 
-原 `uav_keyboard_control` 位置控制对应的主链路是：
+如果另行选用 PX4 原生位置设定值接口，控制链路才是下面的位置/姿态控制流程：
 
 ```text
 键盘位置目标 TrajectorySetpoint
@@ -775,13 +934,12 @@ PX4 的传感器/估计/状态模块先发布内部 **uORB** 消息，再由
 新增 DDS 导出通常要修改该 YAML 并重新编译 PX4；已有消息还需确认实际产生了数据。
 详细规则见官方 [uXRCE-DDS 桥接](https://docs.px4.io/v1.16/zh/middleware/uxrce_dds)。
 
-原双机入口的实例 1/2 使用 `/px4_1`、`/px4_2` 命名空间；新单机入口只有实例 1。
-默认 `MAV_SYS_ID` 分别为 **2/3**，`UXRCE_DDS_KEY` 也分别为 **2/3**；
+当前单机使用 PX4 实例 1、ROS 命名空间 `/px4_1`，默认 `MAV_SYS_ID=2`、`UXRCE_DDS_KEY=2`。
 系统 ID 用于命令目标，DDS key 用于区分客户端，它们用途不同。
 PX4 v1.16 对非零消息版本添加话题后缀，本仓库 `VehicleStatus.MESSAGE_VERSION = 1`，
 因此状态话题实际为 `vehicle_status_v1`，即使 YAML 条目仍写 `vehicle_status`。
 
-常用输出如下；在原双机场景中，将 `/px4_1` 换成 `/px4_2` 可查看第二架飞机：
+当前单机常用输出如下：
 
 - `/px4_1/fmu/out/vehicle_local_position` → `px4_msgs/msg/VehicleLocalPosition`：
   本地 NED 位置 `x/y/z`、速度 `vx/vy/vz`、加速度、航向及位置/速度有效标志。
@@ -797,17 +955,17 @@ PX4 v1.16 对非零消息版本添加话题后缀，本仓库 `VehicleStatus.MES
 - `/px4_1/fmu/out/vehicle_land_detected` → `px4_msgs/msg/VehicleLandDetected`：落地判定，GanYu 用于结束降落阶段。
 - `/px4_1/fmu/out/hover_thrust_estimate` → `px4_msgs/msg/HoverThrustEstimate`：悬停推力估计，
   本项目安装脚本额外启用，估计器运行后才有有效结果。
-- `/camera/image` → `sensor_msgs/msg/Image`：第一架机的相机图像，由 `run_swarm.sh`
-  将 Gazebo 的 `/world/grass_world/model/x500_depth_1/link/camera_link/sensor/IMX214/image`
-  单向桥接出来。新 `run_obstacle_scene.sh` 从 `walls_demo` 的对应相机路径桥接相同 ROS 话题。
+- `/camera/image` → `sensor_msgs/msg/Image`：相机 RGB 图像，由 Gazebo 的
+  `/world/walls_demo/model/x500_depth_1/link/camera_link/sensor/IMX214/image` 单向桥接。
+  脚本和手动方式使用相同的映射。
 - `/camera/camera_info` → `sensor_msgs/msg/CameraInfo`：新单机入口桥接的相机内参。
 - `/clock` → `rosgraph_msgs/msg/Clock`：新单机入口桥接的仿真时间，供 GanYu 推进参考轨迹。
-  两个入口目前都没有额外桥接深度图，当前也没有 MID-360 点云话题。
-- `/camera_detect_result` → `uav_common_msg/msg/RectMsg`：视觉节点运行后发布的检测框。
-  它是算法输出；当前检测发布代码将 `depth` 固定为 0，不能把它当作测距数据。
+  当前没有额外桥接深度图。
+- `/lidar/points` → `sensor_msgs/msg/PointCloud2`：`--mid360` 场景的三维雷达点云，
+  由 Gazebo `/mid360/points` 桥接；默认不带雷达的入口没有该话题。
 
-PX4 本地位置是估计值，不是直接读取 Gazebo 真值。各机的本地原点可能不同，
-双机位置比较应先统一参考系。使用 ROS 常见 ENU/FLU 数据时也要显式转换到 PX4 的 NED/FRD，
+PX4 本地位置是状态估计值，Gazebo 世界坐标与 PX4 本地坐标需要明确参考原点和轴方向。
+使用 ROS 常见 ENU/FLU 数据时要显式转换到 PX4 的 NED/FRD，
 DDS 不会自动转换坐标。字段和单位以本仓库 `.msg` 及官方
 [uORB 消息参考](https://docs.px4.io/v1.16/zh/msg_docs/)为准。
 
@@ -836,22 +994,13 @@ ros2 bag record /px4_1/fmu/out/vehicle_odometry \
   /px4_1/fmu/out/vehicle_local_position /px4_1/fmu/out/vehicle_status_v1
 ```
 
-### 仓库代码在哪里调用这些数据
+### 当前单机代码在哪里调用这些数据
 
-- [ganyu_controller.cpp](uav_ganyu_control/src/ganyu_controller.cpp)：
-  接收里程计、位置有效标志、飞控状态、落地判定及命令 ACK，运行 GanYu 控制并发布状态/调试数据。
-- [uav_vision_png/src/vision_png_control.cpp](uav_vision_png/src/vision_png_control.cpp)：
-  构造函数订阅里程计、位置、状态、GPS、悬停推力和检测结果，在回调中更新内部状态。
-- [uav_rl_guidance/src/rl_guidance_node.cpp](uav_rl_guidance/src/rl_guidance_node.cpp)：
-  订阅同类飞行/视觉数据，构建策略观测并发布制导设定值。
-- [uav_target_sim/src/uav_target_sim.cpp](uav_target_sim/src/uav_target_sim.cpp)：
-  订阅目标机 GPS，并向 `/px4_2/fmu/in/*` 发送轨迹和命令。
-- [uav_vehicle_controller.cpp](uav_vehicle_controller/include/uav_vehicle_controller/uav_vehicle_controller.cpp)：
-  `vehicle_odometry_callback()` 将里程计四元数转为欧拉角。
-- [uav_topic_subscrib.cpp](uav_vision_dectect/src/uav_topic_subscrib.cpp)：
-  订阅 `/camera/image`，发布 `/camera_detect_result`；当前 `main.cpp` 中飞行控制类的实例化已注释。
-- [recorder_node.py](uav_bc_recorder/uav_bc_recorder/recorder_node.py)：
-  订阅图像、里程计、位置、GPS 和设定值，作为 Python 数据采集参考。
+- [ganyu_controller.cpp](uav_ganyu_control/src/ganyu_controller.cpp)：接收里程计、位置有效标志、
+  飞控状态、落地判定、命令 ACK 和仿真时间，运行控制和发布状态/调试数据。
+- [ganyu.hpp](uav_ganyu_control/include/uav_ganyu_control/ganyu.hpp)：控制计算和参考轨迹生成。
+- [keyboard.py](uav_ganyu_control/scripts/keyboard.py)：发送操作与存活消息，显示节点状态。
+- [check_obstacle_scene.py](scripts/check_obstacle_scene.py)：检查场景实体、状态和相机数据，保存结果。
 
 例如，在已加载环境的终端直接运行下面的 Python ROS 2 节点，即可每秒打印一次有效的本地位置。
 它只订阅数据，按 `Ctrl+C` 退出：
@@ -896,7 +1045,7 @@ PY
 
 ### 能否用自己写的 ROS 节点控制
 
-**可以，仓库里的键盘、目标机和制导程序本身就是 ROS 2 控制节点。**
+**可以，GanYu 控制器和键盘客户端本身就是 ROS 2 节点。**
 当前使用 `px4_msgs + uXRCE-DDS`，无需再启动 MAVROS；也没有默认接收 `/cmd_vel` 的转换节点。
 自己的 C++/Python 节点可订阅上述状态，再发布以下输入：
 
@@ -918,10 +1067,9 @@ PY
 [Offboard 模式](https://docs.px4.io/v1.16/zh/flight_modes/offboard)及
 [ROS 2 Offboard 示例](https://docs.px4.io/v1.16/zh/ros2/offboard_control)。
 
-本配置下第一架 `VehicleCommand.target_system=2`，第二架为 `3`，
-`target_component=1`、`from_external=true`。想控制第二架时，需同时修改/重映射输入话题和
-命令目标 ID；仅把 `/px4_1` 改为 `/px4_2` 不足以改变代码中写死的 `target_system`。
-多个控制节点不要同时发布同一架飞机的设定值。
+当前单机的 `VehicleCommand.target_system=2`、`target_component=1`、`from_external=true`。
+后续若扩展其他实例，应同时匹配话题命名空间和命令目标 ID。
+同一架飞机应由一个设定值来源控制；接入新节点时明确它与 GanYu 的控制权关系。
 
 <a id="official-docs"></a>
 
@@ -936,7 +1084,7 @@ PY
    安装工具链和构建 PX4 的过程；本仓库依赖组合以自己的安装脚本为准。
 3. [Gazebo 仿真](https://docs.px4.io/v1.16/zh/sim_gazebo_gz/)与
    [Gazebo 多机仿真](https://docs.px4.io/v1.16/zh/sim_gazebo_gz/multi_vehicle_simulation)：
-   对照 `run_swarm.sh` 学习机型、世界、实例编号和生成位置。
+   对照当前单机脚本和手动步骤学习机型、世界、实例编号和生成位置。
 4. [ROS 2 用户指南](https://docs.px4.io/v1.16/zh/ros2/user_guide)与
    [uXRCE-DDS 桥接](https://docs.px4.io/v1.16/zh/middleware/uxrce_dds)：
    学习消息版本匹配、QoS、命名空间和 `dds_topics.yaml`。
@@ -946,10 +1094,12 @@ PY
 6. [控制器图解](https://docs.px4.io/v1.16/zh/flight_stack/controller_diagrams)与
    [uORB 消息参考](https://docs.px4.io/v1.16/zh/msg_docs/)：继续阅读位置/速度/姿态控制环和具体数据字段。
 
-建议第一次实践按“启动仿真 → 读取状态 → 键盘位置控制 → 自己编写 ROS 2 订阅/控制节点”的顺序进行，
-再加入视觉检测、PNG 或 RL 制导。
----
+建议按“启动单机环境 → 确认状态与相机数据 → 键盘验证 GanYu → 接入上层控制接口”的顺序进行，
+再扩展任务管理、航点执行、定位建图和规划绕障。
 
----
+## 保留资源与历史说明
 
-> **项目维护者注**：如果您需要更多关于算法推导（PNG）的细节，请参考各功能包下的 `include/` 头文件或联系开发团队。
+原 `grass_world.sdf`、`run_swarm.sh`、`uav_keyboard_control` 和其他上游实验包保留在工作空间中。
+原位置键盘与双机实验的命令、按键差异和退出行为见
+[上游历史实验流程](docs/legacy_upstream_workflows.md)。
+当前主 README 的启动步骤使用一架无人机、Walls 场景和 GanYu 控制器。

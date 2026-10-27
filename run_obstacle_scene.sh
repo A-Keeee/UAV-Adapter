@@ -6,17 +6,20 @@ repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 px4_dir=${PX4_DIR:-"$HOME/PX4-Autopilot"}
 headless=false
 check_only=false
+mid360=false
 ready_timeout=90
 while (($#)); do
     case "$1" in
         --headless) headless=true; shift ;;
         --check) check_only=true; shift ;;
+        --mid360) mid360=true; shift ;;
         --timeout)
             [[ ${2:-} =~ ^[1-9][0-9]*$ ]] || { echo "--timeout requires positive seconds" >&2; exit 2; }
             ready_timeout=$2; shift 2 ;;
         -h|--help)
-            echo "Usage: $0 [--headless] [--check] [--timeout SECONDS]"
+            echo "Usage: $0 [--mid360] [--headless] [--check] [--timeout SECONDS]"
             echo "Default: open Walls scene with one unarmed x500_depth and verify ROS data."
+            echo "--mid360: use the new x500_mid360 camera + RGL MID-360 model."
             echo "--check: exit and stop this session after verification. PX4_DIR overrides the PX4 checkout."
             exit 0 ;;
         *) echo "Unknown option: $1" >&2; exit 2 ;;
@@ -57,6 +60,18 @@ source "$repo_dir/install/setup.bash"
 source "$px4_dir/build/px4_sitl_default/rootfs/gz_env.sh"
 set -u
 /usr/bin/python3 -c 'from px4_msgs.msg import VehicleStatus; import rclpy; from PIL import Image'
+vehicle_model=x500_depth
+if $mid360; then
+    rgl_dir=${MID360_RGL_DIR:-"$HOME/.local/opt/gazebo_sim_mid360_rgl-v0.2.0"}
+    for file in RGLServerPlugin/libRGLServerPluginManager.so RGLServerPlugin/libRGLServerPluginInstance.so lidar_patterns/LivoxMid360.mat3x4f; do
+        [[ -f $rgl_dir/$file ]] || { echo "Missing MID-360 dependency: run ./scripts/setup_mid360_sim.sh first." >&2; exit 1; }
+    done
+    vehicle_model=x500_mid360
+    export PX4_GZ_MODELS="$repo_dir/assets/gazebo_models"
+    export GZ_SIM_RESOURCE_PATH="$repo_dir/assets/gazebo_models:${GZ_SIM_RESOURCE_PATH:-}"
+    export GZ_SIM_SYSTEM_PLUGIN_PATH="$rgl_dir/RGLServerPlugin:${GZ_SIM_SYSTEM_PLUGIN_PATH:-}"
+    export RGL_PATTERNS_DIR="$rgl_dir/lidar_patterns"
+fi
 if ! $headless && [[ -z ${DISPLAY:-}${WAYLAND_DISPLAY:-} ]]; then
     echo "No desktop display. Use --headless." >&2
     exit 1
@@ -67,6 +82,11 @@ gz sdf -k "$world" >/dev/null
 mkdir -p "$repo_dir/log/obstacle_scene"
 run_dir=$(mktemp -d "$repo_dir/log/obstacle_scene/$(date +%Y%m%d_%H%M%S)_XXXX")
 mkdir "$run_dir/px4"
+if $mid360; then
+    /usr/bin/python3 "$repo_dir/scripts/prepare_mid360_world.py" --source "$world" --output "$run_dir/walls_mid360.sdf"
+    world="$run_dir/walls_mid360.sdf"
+    gz sdf -k "$world" >/dev/null
+fi
 ln -sfn -- "$run_dir" "$repo_dir/log/obstacle_scene/latest"
 printf '%s\n' "$$" >"$run_dir/launcher.pid"
 pids=()
@@ -91,27 +111,39 @@ start_process() {
     printf '%s %s\n' "$label" "$!" >>"$run_dir/processes.txt"
 }
 
-cat >"$run_dir/bridge.yaml" <<'YAML'
+cat >"$run_dir/bridge.yaml" <<YAML
 - ros_topic_name: /clock
   gz_topic_name: /world/walls_demo/clock
   ros_type_name: rosgraph_msgs/msg/Clock
   gz_type_name: gz.msgs.Clock
   direction: GZ_TO_ROS
 - ros_topic_name: /camera/image
-  gz_topic_name: /world/walls_demo/model/x500_depth_1/link/camera_link/sensor/IMX214/image
+  gz_topic_name: /world/walls_demo/model/${vehicle_model}_1/link/camera_link/sensor/IMX214/image
   ros_type_name: sensor_msgs/msg/Image
   gz_type_name: gz.msgs.Image
   direction: GZ_TO_ROS
 - ros_topic_name: /camera/camera_info
-  gz_topic_name: /world/walls_demo/model/x500_depth_1/link/camera_link/sensor/IMX214/camera_info
+  gz_topic_name: /world/walls_demo/model/${vehicle_model}_1/link/camera_link/sensor/IMX214/camera_info
   ros_type_name: sensor_msgs/msg/CameraInfo
   gz_type_name: gz.msgs.CameraInfo
   direction: GZ_TO_ROS
 YAML
+if $mid360; then
+    cat >>"$run_dir/bridge.yaml" <<'YAML'
+- ros_topic_name: /lidar/points
+  gz_topic_name: /mid360/points
+  ros_type_name: sensor_msgs/msg/PointCloud2
+  gz_type_name: gz.msgs.PointCloudPacked
+  direction: GZ_TO_ROS
+YAML
+fi
 sha256sum "$world" "$repo_dir/assets/gazebo_world/grass_world.sdf" "$repo_dir/run_swarm.sh" >"$run_dir/source.sha256"
 gz sim --versions >"$run_dir/gazebo_version.txt"
 git -C "$px4_dir" describe --always --tags >"$run_dir/px4_version.txt"
-printf 'World: walls_demo; vehicle: x500_depth_1; spawn ENU: (0,0,0); PX4 system ID: 2\nLogs: %s\n' "$run_dir"
+printf 'World: walls_demo; vehicle: %s_1; spawn ENU: (0,0,0); PX4 system ID: 2\nLogs: %s\n' "$vehicle_model" "$run_dir"
+if $mid360; then
+    sha256sum "$repo_dir/assets/gazebo_models/x500_mid360/model.sdf" >>"$run_dir/source.sha256"
+fi
 
 start_process agent MicroXRCEAgent udp4 -p 8888
 server_args=(gz sim -r -s -v 3 "$world")
@@ -121,12 +153,14 @@ if ! $headless; then
     start_process gui gz sim -g --gui-config "$repo_dir/assets/gazebo_world/walls_demo.gui.config"
 fi
 start_process px4 env PX4_GZ_STANDALONE=1 PX4_GZ_WORLD=walls_demo \
-    PX4_SYS_AUTOSTART=4002 PX4_SIM_MODEL=gz_x500_depth PX4_GZ_MODEL_POSE=0,0,0 \
+    PX4_SYS_AUTOSTART=4002 PX4_SIM_MODEL="gz_$vehicle_model" PX4_GZ_MODEL_POSE=0,0,0 \
     PX4_PARAM_EKF2_HGT_REF=1 \
     "$px4_bin" -d -i 1 -w "$run_dir/px4" "$px4_dir/build/px4_sitl_default/etc"
 start_process bridge ros2 run ros_gz_bridge parameter_bridge --ros-args -p "config_file:=$run_dir/bridge.yaml"
 
-if ! /usr/bin/python3 "$repo_dir/scripts/check_obstacle_scene.py" --timeout "$ready_timeout" --output "$run_dir"; then
+check_args=(--timeout "$ready_timeout" --output "$run_dir" --vehicle "${vehicle_model}_1")
+if $mid360; then check_args+=(--require-lidar); fi
+if ! /usr/bin/python3 "$repo_dir/scripts/check_obstacle_scene.py" "${check_args[@]}"; then
     for label in gazebo px4 bridge; do
         echo "Last messages: $label"
         tail -n 15 "$run_dir/$label.log"
@@ -135,6 +169,10 @@ if ! /usr/bin/python3 "$repo_dir/scripts/check_obstacle_scene.py" --timeout "$re
 fi
 echo "READY: world, four obstacle walls, PX4 position/odometry, RGB image, camera info and clock verified."
 echo "Vehicle remains unarmed. No controller or flight task has been started."
+if $mid360; then
+    echo "MID-360 cloud verified: /lidar/points. View with ./run_rviz.sh"
+    echo "GanYu for this 2.3903 kg model: ./run_ganyu_keyboard.sh --ros-args -p mass:=2.390307692307692"
+fi
 if $check_only; then exit 0; fi
 echo "Keep this terminal open. Ctrl+C stops only this scene."
 while sleep 2; do

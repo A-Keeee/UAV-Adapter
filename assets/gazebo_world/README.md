@@ -48,7 +48,10 @@ cd /home/ake/SJTU/适配终端/gazebo_sim
 是否能够解锁仍取决于 PX4 预检。按键、控制层级、参数和当前已删除的附加自动降落条件，
 详见[主 README 的单机入口](../../README.md#ganyu-quickstart)与
 [GanYu 功能包说明](../../uav_ganyu_control/README.md)。
-MID-360、点云桥接和规划器尚未接入，障碍墙本身不会让无人机自动绕行。
+新增的 MID-360 机型可用 `./run_obstacle_scene.sh --mid360` 启动，
+再运行 `./run_rviz.sh` 同时查看相机和点云，详见[主 README 的 RViz2 章节](../../README.md#rviz-sensors)。
+该可选入口在本次运行目录生成包含 RGL 插件的世界副本，原地图文件保持不变。
+规划器尚未接入，障碍墙本身不会让无人机自动绕行。
 
 原双机仿真运行时，新入口会拒绝启动，不会杀掉旧进程。请先在原仿真所属终端退出。
 退出新入口时按 `Ctrl+C`，只关闭本入口创建的进程组。

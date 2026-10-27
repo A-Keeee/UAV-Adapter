@@ -46,6 +46,26 @@ cd /home/ake/SJTU/适配终端/gazebo_sim
 已占用 UDP 14550，会保留已有连接；也可显式使用 `./run_ganyu_keyboard.sh --external-gcs`。
 不能与原键盘、RL、视觉控制或其他 Offboard 发布节点同时控制同一架飞机。
 
+## 可选：相机 + MID-360 新模型
+
+相机和雷达显示由独立的 [uav_sim_visualization](../uav_sim_visualization/README.md) 提供。
+默认 `x500_depth` 的控制参数不变。需要新模型时，分别在三个终端运行：
+
+```bash
+./run_obstacle_scene.sh --mid360
+```
+
+```bash
+./run_rviz.sh
+```
+
+```bash
+./run_ganyu_keyboard.sh --ros-args -p mass:=2.390307692307692
+```
+
+新模型增加 265 g 雷达负载，最后一条使用已有质量参数与新模型匹配，未改 GanYu 控制律或增益。
+首次需要安装 RGL 依赖并构建显示包，参见上面链接；本机已完成该准备。
+
 ## 接入方式
 
 控制核来源为 `sz_indoor_transport` commit `214d185c2f5658dca4e630ff1fc9027f4daf8c9d`

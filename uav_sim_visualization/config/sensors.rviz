@@ -1,0 +1,91 @@
+Panels:
+- Class: rviz_common/Displays
+  Name: Displays
+- Class: rviz_common/Views
+  Name: Views
+Visualization Manager:
+  Class: ''
+  Displays:
+  - Class: rviz_default_plugins/Grid
+    Name: Grid
+    Enabled: true
+    Cell Size: 1
+    Plane: XY
+    Reference Frame: odom
+    Color: 100; 100; 110
+    Alpha: 0.35
+    Value: true
+  - Class: rviz_default_plugins/Axes
+    Name: Vehicle axes
+    Enabled: true
+    Reference Frame: base_link
+    Length: 0.5
+    Radius: 0.015
+    Value: true
+  - Class: rviz_default_plugins/PointCloud2
+    Name: MID-360 point cloud
+    Enabled: true
+    Topic:
+      Value: /lidar/points
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Depth: 5
+    Position Transformer: XYZ
+    Color Transformer: AxisColor
+    Axis: Z
+    Autocompute Value Bounds: true
+    Style: Points
+    Size (Pixels): 3
+    Size (m): 0.025
+    Alpha: 1
+    Decay Time: 0.15
+    Use Fixed Frame: true
+    Value: true
+  - Class: rviz_default_plugins/Image
+    Name: RGB camera
+    Enabled: true
+    Topic:
+      Value: /camera/image
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Depth: 2
+    Transport Hint: raw
+    Queue Size: 2
+    Normalize Range: true
+    Value: true
+  Global Options:
+    Fixed Frame: odom
+    Background Color: 24; 24; 28
+    Frame Rate: 30
+  Tools:
+  - Class: rviz_default_plugins/Interact
+  - Class: rviz_default_plugins/MoveCamera
+  - Class: rviz_default_plugins/Select
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Target Frame: base_link
+      Distance: 12
+      Pitch: 0.65
+      Yaw: 0.8
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 1
+      Near Clip Distance: 0.01
+Window Geometry:
+  Width: 1400
+  Height: 900
+  X: 80
+  Y: 60
+  Hide Left Dock: false
+  Hide Right Dock: false
+  QMainWindow State: 000000ff00000000fd00000002000000000000019000000373fc0200000002fb000000100044006900730070006c0061007900730100000011000001d40000001700fffffffb00000014005200470042002000630061006d00650072006101000001eb000001990000001700ffffff000000010000000000000000fc0200000001fb0000000a005600690065007700730000000000ffffffff0000001700ffffff000003e20000037300000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Displays:
+    collapsed: false
+  RGB camera:
+    collapsed: false
+  Views:
+    collapsed: false

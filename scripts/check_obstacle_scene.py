@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Read-only readiness check for Walls + x500_depth; never arms the vehicle."""
+"""Read-only readiness check for Walls + selected x500 model; never arms the vehicle."""
 import argparse
 import json
 import math
 from pathlib import Path
 import re
+import struct
 import subprocess
 import time
 
@@ -14,12 +15,31 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from px4_msgs.msg import VehicleLocalPosition, VehicleOdometry, VehicleStatus
 from rosgraph_msgs.msg import Clock
-from sensor_msgs.msg import CameraInfo, Image
+from sensor_msgs.msg import CameraInfo, Image, PointCloud2
+
+
+def cloud_summary(msg):
+    fields = {field.name: field for field in msg.fields}
+    if not all(name in fields and fields[name].datatype == 7 for name in ('x', 'y', 'z')):
+        raise ValueError('Expected FLOAT32 XYZ point cloud')
+    endian = '>' if msg.is_bigendian else '<'
+    offsets = [fields[name].offset for name in ('x', 'y', 'z')]
+    finite = 0
+    for row in range(msg.height):
+        for column in range(msg.width):
+            base = row * msg.row_step + column * msg.point_step
+            xyz = [struct.unpack_from(endian + 'f', msg.data, base + offset)[0] for offset in offsets]
+            if all(math.isfinite(value) for value in xyz):
+                finite += 1
+    return {'frame_id': msg.header.frame_id, 'width': msg.width, 'height': msg.height,
+            'points': msg.width * msg.height, 'finite_points': finite,
+            'fields': list(fields)}
 
 
 class SceneCheck(Node):
-    def __init__(self):
+    def __init__(self, require_lidar=False):
         super().__init__('obstacle_scene_check')
+        self.require_lidar = require_lidar
         self.count = {}
         self.last = {}
         self.last_received = {}
@@ -34,6 +54,8 @@ class SceneCheck(Node):
             ('camera_info', CameraInfo, '/camera/camera_info'),
             ('clock', Clock, '/clock'),
         ]
+        if require_lidar:
+            topics.append(('lidar', PointCloud2, '/lidar/points'))
         self.subscriptions_ = [self.create_subscription(
             kind, topic, lambda msg, key=key: self.received(key, msg),
             qos_profile_sensor_data) for key, kind, topic in topics]
@@ -51,6 +73,14 @@ class SceneCheck(Node):
             return False
         if any(time.monotonic() - stamp > 3 for stamp in self.last_received.values()):
             return False
+        if self.require_lidar:
+            if self.count.get('lidar', 0) < 3:
+                return False
+            try:
+                if cloud_summary(self.last['lidar'])['finite_points'] < 100:
+                    return False
+            except (ValueError, struct.error):
+                return False
         pos, odom = self.last['position'], self.last['odometry']
         img, info = self.last['image'], self.last['camera_info']
         clock = self.last['clock'].clock
@@ -67,11 +97,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--timeout', type=float, default=60)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--vehicle', default='x500_depth_1')
+    parser.add_argument('--require-lidar', action='store_true')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     rclpy.init()
-    node = SceneCheck()
-    result = {'passed': False, 'world': 'walls_demo', 'vehicle': 'x500_depth_1'}
+    node = SceneCheck(args.require_lidar)
+    result = {'passed': False, 'world': 'walls_demo', 'vehicle': args.vehicle}
     try:
         deadline = time.monotonic() + args.timeout
         while time.monotonic() < deadline and not node.ready():
@@ -84,7 +116,7 @@ def main():
             '--reqtype', 'gz.msgs.Empty', '--reptype', 'gz.msgs.Scene',
             '--timeout', '4000', '--req', '',
         ], capture_output=True, text=True, timeout=8, check=True).stdout
-        expected = ['box1', 'box2', 'box3', 'box4', 'takeoff_pad', 'x500_depth_1']
+        expected = ['box1', 'box2', 'box3', 'box4', 'takeoff_pad', args.vehicle]
         missing = [name for name in expected if not re.search(r'name:\s*"' + re.escape(name) + r'"', scene)]
         if missing:
             raise RuntimeError(f'Gazebo scene entities missing: {missing}')
@@ -105,6 +137,8 @@ def main():
                       image={'width': img.width, 'height': img.height, 'encoding': img.encoding},
                       simulation_time_s=node.last['clock'].clock.sec,
                       checks='ROS data, simulation clock advancement, and Gazebo scene entities; no flight')
+        if args.require_lidar:
+            result['lidar'] = cloud_summary(node.last['lidar'])
     except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as exc:
         result['error'] = str(exc)
     finally:
