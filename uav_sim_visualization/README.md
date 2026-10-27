@@ -51,8 +51,8 @@ ros2 launch uav_sim_visualization sensors.launch.py
 ros2 launch uav_sim_visualization sensors.launch.py rviz:=false
 ```
 
-逐个启动 Gazebo、PX4、桥接和可视化的完整命令见
-[主 README 第 5.3 节](../README.md#rviz-sensors)。
+控制器、键盘与可视化节点的手动启动命令见
+[主 README](../README.md#manual-start)。
 
 本机于 2026-10-27 验证：1920×1080 RGB 图像、10 Hz 点云同时显示，
 116 帧点云的消息时间均可查询到 TF。使用新质量参数完成六方向小步移动、

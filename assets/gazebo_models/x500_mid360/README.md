@@ -24,4 +24,5 @@
 ./run_ganyu_keyboard.sh --ros-args -p mass:=2.390307692307692
 ```
 
-完整启动、手动步骤及本机验证记录见[主 README](../../../README.md#rviz-sensors)。
+仿真入口与关键 ROS 节点的启动命令见[主 README](../../../README.md#manual-start)，
+本机验证记录见[可视化功能包说明](../../../uav_sim_visualization/README.md)。

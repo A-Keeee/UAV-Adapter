@@ -2,7 +2,7 @@
 
 独立新增的 ROS 2 包，移植本机 `sz_indoor_transport` 的 `QuadrotorControllerGanYu`。
 不替换原来的 `uav_keyboard_control`，不修改场景、机型、传感器、PX4 参数或原启动脚本。
-完整的场景启动、参数、接口及排查说明见[主 README](../README.md#ganyu-quickstart)。
+场景入口与关键 ROS 节点的启动说明见[主 README](../README.md#ganyu-quickstart)。
 
 ## 编译与使用
 
