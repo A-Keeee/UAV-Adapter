@@ -122,6 +122,9 @@ public:
   }
   void moveTo(const Vec3 &goal, double time, double duration) {
     const Reference from = sample(time);
+    moveFrom(from, goal, time, duration);
+  }
+  void moveFrom(const Reference &from, const Vec3 &goal, double time, double duration) {
     duration_ = std::max(1.5, duration); start_ = time; goal_ = goal;
     coefficients_.row(0) = from.p.transpose();
     coefficients_.row(1) = (from.v * duration_).transpose();

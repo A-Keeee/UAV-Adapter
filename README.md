@@ -2,18 +2,43 @@
 
 基于 ROS 2 Humble、PX4 SITL 和 Gazebo Harmonic，使用余老师的
 `QuadrotorControllerGanYu` 完成单机键盘飞行控制，支持相机图像与 MID-360 仿真点云显示。
-当前已实现起飞、位置调整、悬停与人工降落；航点任务和雷达避障尚未接入。
+支持键盘飞行，以及 **给定路点 → 三维 A* 避障搜索 → 七次 B 样条 → GanYu 跟踪 → 降落**。
+规划器使用 Walls 场景的静态碰撞地图；MID-360 点云用于显示，尚未接入雷达建图或动态避障。
+
+## 航点规划与避障演示
+
+```bash
+./scripts/build_planner.sh
+```
+
+两个终端分别运行：
+
+```bash
+# 终端 1：等待 READY
+./run_obstacle_scene.sh
+```
+
+```bash
+# 终端 2：自动起飞、绕墙、依次到达路点、降落
+./run_ganyu_planner.sh --start --rviz
+```
+
+不加 `--start` 只显示规划，不解锁。MID-360 机型两条启动命令都加 `--mid360`。
+RViz 用橙色显示 A*、青色显示 B 样条、绿色显示实际飞行轨迹，并显示墙体与安全膨胀区域。
+默认路点要求绕过两面墙；修改 [waypoints.yaml](uav_path_planner/config/waypoints.yaml) 可指定自己的 ENU 路点。
+`Ctrl+C` 会先请求降落再退出。不要同时运行键盘控制入口。
+详细原理、约束、日志与话题见 [规划包说明](uav_path_planner/README.md)。
 
 ## 编译与准备
 
 在项目目录执行：
 
 ```bash
-source /opt/ros/humble/setup.bash
-colcon build --symlink-install --packages-up-to uav_ganyu_control uav_sim_visualization \
-  --cmake-args -DCMAKE_BUILD_TYPE=Release
+./scripts/build_planner.sh
 source install/setup.bash
 ```
+
+脚本使用独立英文构建缓存，兼容 ROS Humble 消息生成器与当前中文工作空间路径。
 
 使用 MID-360 模型前，首次安装 RGL 依赖；本机已安装，重复执行会校验已有安装：
 
@@ -104,7 +129,8 @@ ros2 run uav_ganyu_control ganyu_keyboard --external-gcs
 - `x` / `Ctrl+C`：请求降落，确认未解锁后退出键盘。
 
 方向使用固定世界坐标，不随机头转动。松开按键后保持最后目标；
-水平目标范围为起飞点各方向 ±3 m，高度范围为 0.5～3 m，当前没有自动避障。
+水平目标范围为起飞点各方向 ±3 m，高度范围为 0.5～3 m。键盘模式没有自动避障；
+自动航点避障使用上面的规划入口。
 
 <a id="rviz-sensors"></a>
 
@@ -172,6 +198,7 @@ RViz2 提示缺少 TF 时，确认显示节点、PX4 里程计和 `/clock` 正�
 更多说明：
 
 - [GanYu 输入输出、参数与验证记录](uav_ganyu_control/README.md)
+- [A* + B 样条航点规划](uav_path_planner/README.md)
 - [相机与 MID-360 可视化](uav_sim_visualization/README.md)
 - [无人机模型](assets/gazebo_models/x500_mid360/README.md)
 - [Walls 障碍场景](assets/gazebo_world/README.md)

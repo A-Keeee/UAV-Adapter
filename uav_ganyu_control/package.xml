@@ -11,6 +11,7 @@
   <depend>px4_msgs</depend>
   <depend>std_msgs</depend>
   <depend>rosgraph_msgs</depend>
+  <depend>uav_common_msg</depend>
   <depend>eigen</depend>
   <exec_depend>ament_index_python</exec_depend>
   <export><build_type>ament_cmake</build_type></export>

@@ -15,10 +15,11 @@ def generate_launch_description():
         DeclareLaunchArgument('rviz', default_value='true'),
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         DeclareLaunchArgument('px4_namespace', default_value='/px4_1'),
+        DeclareLaunchArgument('rviz_config', default_value=str(config)),
         Node(package='uav_sim_visualization', executable='sensor_frames', output='screen',
              parameters=[{'use_sim_time': use_sim_time,
                           'px4_namespace': LaunchConfiguration('px4_namespace')}]),
         Node(package='rviz2', executable='rviz2', name='sensor_rviz', output='screen',
-             arguments=['-d', str(config)], parameters=[{'use_sim_time': use_sim_time}],
+             arguments=['-d', LaunchConfiguration('rviz_config')], parameters=[{'use_sim_time': use_sim_time}],
              condition=IfCondition(LaunchConfiguration('rviz'))),
     ])

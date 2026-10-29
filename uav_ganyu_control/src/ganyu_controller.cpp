@@ -1,4 +1,6 @@
 #include "uav_ganyu_control/ganyu.hpp"
+#include "uav_ganyu_control/bspline.hpp"
+#include <uav_common_msg/msg/b_spline_trajectory.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <px4_msgs/msg/offboard_control_mode.hpp>
 #include <px4_msgs/msg/vehicle_rates_setpoint.hpp>
@@ -27,6 +29,9 @@ public:
     system_id_ = declare_parameter<int>("target_system", 2);
     takeoff_height_ = declare_parameter<double>("takeoff_height", 1.5);
     step_ = declare_parameter<double>("keyboard_step", 0.25);
+    reference_source_ = declare_parameter<std::string>("reference_source", "keyboard");
+    if (reference_source_ != "keyboard" && reference_source_ != "planner")
+      throw std::runtime_error("reference_source must be keyboard or planner");
     controller_.params.mass = declare_parameter<double>("mass", 2.125307692307692);
     controller_.params.max_thrust = declare_parameter<double>("max_thrust", 30.0);
     motor_k_ = declare_parameter<double>("motor_constant", 8.54858e-6);
@@ -84,6 +89,8 @@ public:
       [this](std_msgs::msg::String::ConstSharedPtr msg) { if (msg->data.size() == 1) onKey(msg->data[0]); });
     heartbeat_sub_ = create_subscription<std_msgs::msg::Empty>("/ganyu/keyboard_alive", 10,
       [this](std_msgs::msg::Empty::ConstSharedPtr) { keyboard_at_ = wallTime(); });
+    spline_sub_ = create_subscription<uav_common_msg::msg::BSplineTrajectory>("/planning/trajectory", 10,
+      [this](uav_common_msg::msg::BSplineTrajectory::ConstSharedPtr msg) { onSpline(*msg); });
     timer_ = create_wall_timer(5ms, [this]() { tick(); });
     RCLCPP_INFO(get_logger(), "GanYu ready; no automatic arming. T=%.3f kg, expected hover input=%.3f",
                 controller_.params.mass, thrustInput(controller_.params.mass*9.81));
@@ -102,6 +109,7 @@ private:
   double thrustInput(double thrust) const { return normalizedThrust(thrust, motor_k_, speed_min_, speed_max_, thrust_factor_); }
   void phase(const std::string &value) {
     phase_ = value; last_command_at_ = 0;
+    if (value != "ACTIVE") spline_active_ = false;
     RCLCPP_INFO(get_logger(), "State -> %s", phase_.c_str());
   }
   void command(uint32_t cmd, float p1 = 0, float p2 = 0) {
@@ -128,6 +136,38 @@ private:
     if (!armed()) { controller_.resetIntegral(); phase("IDLE"); return; }
     phase("LANDING"); command(px4::VehicleCommand::VEHICLE_CMD_NAV_LAND);
   }
+  void onSpline(const uav_common_msg::msg::BSplineTrajectory &msg) {
+    if (reference_source_ != "planner" || phase_ != "ACTIVE" || !feedbackReady() || !armed() ||
+        vehicle_.nav_state != px4::VehicleStatus::NAVIGATION_STATE_OFFBOARD ||
+        spline_active_ || msg.trajectory_id <= trajectory_id_) return;
+    try {
+      if (msg.header.frame_id != "px4_ned" || msg.control_points.size()%3)
+        throw std::runtime_error("Expected flattened XYZ in px4_ned");
+      const double start = msg.start_time.sec + msg.start_time.nanosec*1e-9;
+      if (start < sim_time_-0.05 || start > sim_time_+3)
+        throw std::runtime_error("Trajectory start time is stale or too far in future");
+      std::vector<Vec3> points;
+      for (size_t i=0; i<msg.control_points.size(); i+=3)
+        points.emplace_back(msg.control_points[i], msg.control_points[i+1], msg.control_points[i+2]);
+      BSplineReference candidate;
+      candidate.set(msg.degree, msg.knots, points);
+      const auto first = candidate.sample(0);
+      const auto last = candidate.sample(candidate.duration()-1e-7);
+      const auto current = reference_.sample(sim_time_);
+      if ((first.p-current.p).norm() > 0.15 || (first.p-state_.p).norm() > 0.35 ||
+          current.v.norm() > 0.1 || state_.v.norm() > 0.25 || first.v.norm() > 1e-5 ||
+          first.a.norm() > 1e-5 || first.j.norm() > 1e-5 || last.v.norm() > 1e-5 ||
+          last.a.norm() > 1e-5 || last.j.norm() > 1e-4)
+        throw std::runtime_error("Spline must join a stationary hover with zero endpoint derivatives");
+      if (candidate.derivativeBound(1) > 2 || candidate.derivativeBound(2) > 2 || candidate.derivativeBound(3) > 5)
+        throw std::runtime_error("Trajectory exceeds controller reference limits (2 m/s, 2 m/s^2, 5 m/s^3)");
+      spline_ = candidate; spline_start_ = start; trajectory_id_ = msg.trajectory_id;
+      spline_active_ = true;
+      RCLCPP_INFO(get_logger(), "Accepted B-spline %lu, duration %.2f s", trajectory_id_, spline_.duration());
+    } catch (const std::exception &err) {
+      RCLCPP_WARN(get_logger(), "Rejected planner trajectory: %s", err.what());
+    }
+  }
   void onKey(char key) {
     if (key == 'l' || key == 'x') { requestLand("Keyboard"); return; }
     if (key == 't') {
@@ -141,6 +181,15 @@ private:
       stream_start_ = sim_time_; return;
     }
     if (phase_ != "ACTIVE") return;
+    if (reference_source_ == "planner") {
+      if (key == ' ') {
+        // Preserve p/v/a/j when the operator cancels a trajectory and brakes.
+        const auto ref = spline_active_ ? spline_.sample(sim_time_-spline_start_) : reference_.sample(sim_time_);
+        reference_.moveFrom(ref, ref.p, sim_time_, 2.0);
+        spline_active_ = false;
+      }
+      return;
+    }
     Vec3 target = reference_.goal();
     if (key == 'w') target.x() += step_; else if (key == 's') target.x() -= step_;
     else if (key == 'a') target.y() -= step_; else if (key == 'd') target.y() += step_;
@@ -178,7 +227,10 @@ private:
       << ",\"preflight\":" << (vehicle_.pre_flight_checks_pass ? "true":"false")
       << ",\"armed\":" << (armed()?"true":"false") << ",\"landed\":" << (landed_?"true":"false")
       << ",\"nav_state\":" << static_cast<int>(vehicle_.nav_state)
-      << ",\"position_ned\":" << vec(state_.p) << ",\"target_ned\":" << vec(reference_.goal())
+      << ",\"reference_source\":\"" << reference_source_ << "\""
+      << ",\"trajectory_id\":" << trajectory_id_ << ",\"trajectory_active\":" << (spline_active_?"true":"false")
+      << ",\"home_ned\":" << vec(home_) << ",\"velocity_ned\":" << vec(state_.v)
+      << ",\"position_ned\":" << vec(state_.p) << ",\"target_ned\":" << vec(spline_active_ ? spline_.goal() : reference_.goal())
       << ",\"offset_neu\":" << vec(Vec3(state_.p.x()-home_.x(), state_.p.y()-home_.y(), home_.z()-state_.p.z()))
       << ",\"thrust_N\":" << last_output_.thrust << ",\"throttle\":" << thrustInput(last_output_.thrust) << '}';
     msg.data = s.str(); status_pub_->publish(msg);
@@ -217,7 +269,14 @@ private:
     last_sim_ = sim_time_;
     if (dt <= 0) { publishOffboardMode(); return; }
     try {
-      const Reference ref = reference_.sample(sim_time_);
+      Reference ref = reference_.sample(sim_time_);
+      if (spline_active_) {
+        ref = spline_.sample(sim_time_-spline_start_);
+        if (sim_time_ >= spline_start_+spline_.duration()) {
+          reference_.reset(spline_.goal(), sim_time_);
+          spline_active_ = false;
+        }
+      }
       const Command out = controller_.update(state_, ref, dt, yaw_reference_);
       publishRates(out);
       if (now-last_debug_at_ > 0.05) {
@@ -233,10 +292,14 @@ private:
     }
   }
 
-  std::string prefix_, phase_ = "IDLE";
+  std::string prefix_, phase_ = "IDLE", reference_source_;
   int system_id_ = 2;
   double takeoff_height_, step_, motor_k_, speed_min_, speed_max_, thrust_factor_;
   State state_; QuadrotorControllerGanYu controller_; SmoothReference reference_;
+  BSplineReference spline_;
+  bool spline_active_ = false;
+  uint64_t trajectory_id_ = 0;
+  double spline_start_ = 0;
   Vec3 home_ = Vec3::Zero(); Command last_output_;
   px4::VehicleStatus vehicle_{};
   bool have_odom_ = false, have_vehicle_ = false, position_valid_ = false, landed_ = true;
@@ -258,6 +321,7 @@ private:
   rclcpp::Subscription<rosgraph_msgs::msg::Clock>::SharedPtr clock_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr key_sub_;
   rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr heartbeat_sub_;
+  rclcpp::Subscription<uav_common_msg::msg::BSplineTrajectory>::SharedPtr spline_sub_;
 };
 
 int main(int argc, char **argv) {

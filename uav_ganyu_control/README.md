@@ -1,5 +1,10 @@
 # GanYu 单机键盘控制
 
+已增加独立的 [A* + B 样条航点任务入口](../uav_path_planner/README.md)：
+`./run_ganyu_planner.sh --start --rviz`。此模式通过 `reference_source:=planner` 接收完整 B 样条，
+在控制器内部计算 p/v/a/jerk 并调用同一个 GanYu 控制核；默认键盘模式仍保留。
+航点模式与键盘入口不能同时运行。
+
 独立新增的 ROS 2 包，移植本机 `sz_indoor_transport` 的 `QuadrotorControllerGanYu`。
 不替换原来的 `uav_keyboard_control`，不修改场景、机型、传感器、PX4 参数或原启动脚本。
 场景入口与关键 ROS 节点的启动说明见[主 README](../README.md#ganyu-quickstart)。
@@ -12,7 +17,7 @@
 cd /home/ake/SJTU/适配终端/gazebo_sim
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-colcon build --symlink-install --packages-select uav_ganyu_control --cmake-args -DCMAKE_BUILD_TYPE=Release
+./scripts/build_planner.sh
 ```
 
 终端 1：按原入口启动已经加入的障碍场景，等待 READY。

@@ -1,0 +1,15 @@
+waypoint_mission:
+  ros__parameters:
+    # ENU metres relative to the spawn/takeoff origin: east, north, up.
+    # First leg must pass around box2; second leg around the north end of box1.
+    waypoints: [0.0, 8.0, 2.5, 8.0, 8.0, 2.5, 8.0, 0.0, 2.5]
+    takeoff_height: 2.5
+    map_min: [-15.0, -16.0, 0.8]
+    map_max: [25.0, 18.0, 4.0]
+    resolution: 0.4
+    safety_radius: 0.65
+    max_velocity: 1.0
+    max_acceleration: 0.7
+    max_jerk: 1.5
+    auto_start: false
+    land_at_end: true
