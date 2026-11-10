@@ -24,7 +24,7 @@
 ```
 
 不加 `--start` 只显示规划，不解锁。MID-360 机型两条启动命令都加 `--mid360`。
-RViz 用橙色显示 A*、青色显示 B 样条、绿色显示实际飞行轨迹，并显示墙体与安全膨胀区域。
+RViz 用橙色显示 A* 、青色显示 B 样条、绿色显示实际飞行轨迹，并显示墙体与安全膨胀区域。
 默认路点要求绕过两面墙；修改 [waypoints.yaml](uav_path_planner/config/waypoints.yaml) 可指定自己的 ENU 路点。
 `Ctrl+C` 会先请求降落再退出。不要同时运行键盘控制入口。
 详细原理、约束、日志与话题见 [规划包说明](uav_path_planner/README.md)。
