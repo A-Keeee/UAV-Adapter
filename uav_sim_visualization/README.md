@@ -29,6 +29,10 @@ RGL 需要 NVIDIA RTX 显卡；依赖安装在用户目录，不修改系统驱�
 - 图像：`/camera/image`；相机内参：`/camera/camera_info`。
 - 雷达：Gazebo `/mid360/points` → ROS `/lidar/points`。
 - 点云坐标系：`mid360_link`，安装在 `base_link` 上方 0.12 m。
+
+航点任务通过 `./run_ganyu_planner.sh --mid360 --start --rviz` 使用同一份点云进行
+制动和动态绕障重规划，不进行雷达建图；详见 [航点规划说明](../uav_path_planner/README.md)。
+该可视化包本身仍只发布 TF 和显示数据。
 - RViz 固定坐标系：`odom`；显示节点将 PX4 NED/FRD 里程计转换为 ENU/FLU TF。
 - 配置文件：`config/sensors.rviz`，同时启用 Image 与 PointCloud2，接收 QoS 为 Best Effort。
 

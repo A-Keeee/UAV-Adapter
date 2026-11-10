@@ -54,6 +54,12 @@ cd /home/ake/SJTU/适配终端/gazebo_sim
 该可选入口在本次运行目录生成包含 RGL 插件的世界副本，原地图文件保持不变。
 自动规划任务使用 `./run_ganyu_planner.sh --start --rviz`；MID-360 机型同时加 `--mid360`。
 
+测试全局地图不可见的障碍物时，使用 `./run_obstacle_scene.sh --mid360 --unknown-obstacles`。
+独立 C++ 场景节点读取 `unknown_obstacles.yaml`，在三个默认航段开始执行后各生成一根橙红色柱体。
+柱体只进入正在运行的 Gazebo 世界，`walls_demo.sdf` 及规划器读取的静态地图保持原来的四面墙。
+通过 MID-360 点云触发避障重规划，结果见 `log/obstacle_scene/latest/unknown_obstacles.json`。
+详见 [三航段未知障碍物场景](../../uav_path_planner/README.md#三航段未知障碍物场景)。
+
 原双机仿真运行时，新入口会拒绝启动，不会杀掉旧进程。请先在原仿真所属终端退出。
 退出新入口时按 `Ctrl+C`，只关闭本入口创建的进程组。
 

@@ -1,0 +1,15 @@
+# Gazebo-only scenario. Never merge this file into the planner's walls_demo.sdf.
+# One obstacle appears after its leg is already being tracked. ENU metres.
+obstacles:
+  - name: leg1_pillar
+    leg: 1
+    center: [1.33, 1.77, 2.5]
+    size: [0.6, 0.6, 5.0]
+  - name: leg2_pillar
+    leg: 2
+    center: [1.77, 9.33, 2.5]
+    size: [0.6, 0.6, 5.0]
+  - name: leg3_pillar
+    leg: 3
+    center: [8.0, 5.5, 2.5]
+    size: [0.6, 0.6, 5.0]

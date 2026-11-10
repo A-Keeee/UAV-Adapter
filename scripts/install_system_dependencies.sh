@@ -26,7 +26,7 @@ apt-get install -y \
     python3-pip python3-dev python3-venv python3-setuptools python3-wheel \
     python3-colcon-common-extensions python3-rosdep \
     python3-numpy python3-opencv \
-    libopencv-dev libeigen3-dev libgeographic-dev \
+    libopencv-dev libeigen3-dev libgeographic-dev nlohmann-json3-dev libyaml-cpp-dev \
     ros-humble-cv-bridge apache2-utils libunwind-dev libasio-dev libtinyxml2-dev \
     astyle ccache cppcheck file gdb lcov libssl-dev libxml2-dev libxml2-utils \
     rsync shellcheck unzip zip bc pkg-config \

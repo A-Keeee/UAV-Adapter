@@ -7,24 +7,31 @@ px4_dir=${PX4_DIR:-"$HOME/PX4-Autopilot"}
 headless=false
 check_only=false
 mid360=false
+unknown_obstacles=false
 ready_timeout=90
 while (($#)); do
     case "$1" in
         --headless) headless=true; shift ;;
         --check) check_only=true; shift ;;
         --mid360) mid360=true; shift ;;
+        --unknown-obstacles) unknown_obstacles=true; shift ;;
         --timeout)
             [[ ${2:-} =~ ^[1-9][0-9]*$ ]] || { echo "--timeout requires positive seconds" >&2; exit 2; }
             ready_timeout=$2; shift 2 ;;
         -h|--help)
-            echo "Usage: $0 [--mid360] [--headless] [--check] [--timeout SECONDS]"
+            echo "Usage: $0 [--mid360] [--unknown-obstacles] [--headless] [--check] [--timeout SECONDS]"
             echo "Default: open Walls scene with one unarmed x500_depth and verify ROS data."
             echo "--mid360: use the new x500_mid360 camera + RGL MID-360 model."
+            echo "--unknown-obstacles: spawn three Gazebo-only pillars during waypoint tracking; requires --mid360."
             echo "--check: exit and stop this session after verification. PX4_DIR overrides the PX4 checkout."
             exit 0 ;;
         *) echo "Unknown option: $1" >&2; exit 2 ;;
     esac
 done
+if $unknown_obstacles && ! $mid360; then
+    echo "--unknown-obstacles requires --mid360 for lidar avoidance." >&2
+    exit 2
+fi
 
 export PATH="$HOME/.local/bin:$PATH"
 for tool in gz MicroXRCEAgent setsid flock grep pgrep timeout /usr/bin/python3; do
@@ -33,6 +40,10 @@ done
 px4_bin="$px4_dir/build/px4_sitl_default/bin/px4"
 [[ -x $px4_bin ]] || { echo "PX4 SITL is not built: $px4_bin" >&2; exit 1; }
 [[ -f $repo_dir/install/setup.bash ]] || { echo "Build this ROS 2 workspace first." >&2; exit 1; }
+scenario_bin="$repo_dir/install/uav_path_planner/lib/uav_path_planner/unknown_obstacle_scene"
+if $unknown_obstacles; then
+    [[ -x $scenario_bin ]] || { echo "Build the C++ unknown-obstacle scenario first: ./scripts/build_planner.sh" >&2; exit 1; }
+fi
 
 # Refuse conflicting simulators instead of killing someone else's simulation.
 exec 9>"${XDG_RUNTIME_DIR:-/tmp}/gazebo_sim_obstacle_${UID}.lock"
@@ -157,6 +168,12 @@ start_process px4 env PX4_GZ_STANDALONE=1 PX4_GZ_WORLD=walls_demo \
     PX4_PARAM_EKF2_HGT_REF=1 \
     "$px4_bin" -d -i 1 -w "$run_dir/px4" "$px4_dir/build/px4_sitl_default/etc"
 start_process bridge ros2 run ros_gz_bridge parameter_bridge --ros-args -p "config_file:=$run_dir/bridge.yaml"
+if $unknown_obstacles; then
+    cp -- "$repo_dir/assets/gazebo_world/unknown_obstacles.yaml" "$run_dir/unknown_obstacles.yaml"
+    sha256sum "$repo_dir/assets/gazebo_world/walls_demo.sdf" "$run_dir/unknown_obstacles.yaml" >>"$run_dir/source.sha256"
+    start_process unknown_obstacles "$scenario_bin" --ros-args \
+        -p "config:=$run_dir/unknown_obstacles.yaml" -p "output:=$run_dir/unknown_obstacles.json"
+fi
 
 check_args=(--timeout "$ready_timeout" --output "$run_dir" --vehicle "${vehicle_model}_1")
 if $mid360; then check_args+=(--require-lidar); fi
@@ -172,6 +189,12 @@ echo "Vehicle remains unarmed. No controller or flight task has been started."
 if $mid360; then
     echo "MID-360 cloud verified: /lidar/points. View with ./run_rviz.sh"
     echo "GanYu for this 2.3903 kg model: ./run_ganyu_keyboard.sh --ros-args -p mass:=2.390307692307692"
+fi
+if $unknown_obstacles; then
+    echo "Unknown-obstacle test: one unmapped pillar appears after each of the three default legs starts tracking."
+    echo "The global planner still reads the unchanged walls_demo.sdf; obstacle geometry reaches it only through lidar."
+    echo "Start: ./run_ganyu_planner.sh --mid360 --start --rviz"
+    echo "Evaluation: $run_dir/unknown_obstacles.json"
 fi
 if $check_only; then exit 0; fi
 echo "Keep this terminal open. Ctrl+C stops only this scene."

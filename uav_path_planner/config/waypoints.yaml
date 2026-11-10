@@ -13,3 +13,22 @@ waypoint_mission:
     max_jerk: 1.5
     auto_start: false
     land_at_end: true
+    # --mid360 enables this automatically. Only short-lived local obstacles; no SLAM.
+    lidar_enabled: false
+    lidar_topic: /lidar/points
+    lidar_frame: mid360_link
+    # Current scene spawns with ENU yaw 0. Correct the initial EKF heading bias once.
+    lidar_align_spawn_yaw: true
+    lidar_spawn_yaw_enu: 0.0
+    lidar_register_known_walls: true
+    lidar_replan_margin: 0.2
+    lidar_range: 8.0
+    lidar_min_range: 0.45
+    lidar_ground_height: 0.15
+    lidar_voxel_size: 0.3
+    lidar_margin: 0.15
+    lidar_memory: 0.6
+    lidar_timeout: 0.5
+    lidar_lookahead: 6.0
+    lidar_max_voxels: 6000
+    replan_timeout: 30.0

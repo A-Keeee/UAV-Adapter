@@ -3,7 +3,9 @@
 基于 ROS 2 Humble、PX4 SITL 和 Gazebo Harmonic，使用余老师的
 `QuadrotorControllerGanYu` 完成单机键盘飞行控制，支持相机图像与 MID-360 仿真点云显示。
 支持键盘飞行，以及 **给定路点 → 三维 A* 避障搜索 → 七次 B 样条 → GanYu 跟踪 → 降落**。
-规划器使用 Walls 场景的静态碰撞地图；MID-360 点云用于显示，尚未接入雷达建图或动态避障。
+航点规划、MID-360 点云处理和任务执行统一使用 C++。
+规划器使用 Walls 场景的静态碰撞地图；`--mid360` 启用实时点云动态避障：前方受阻时制动悬停、
+结合最新点云绕障重规划并继续航点任务。仅保留短时局部障碍物，不做雷达建图。
 
 ## 航点规划与避障演示
 
@@ -28,6 +30,20 @@ RViz 用橙色显示 A* 、青色显示 B 样条、绿色显示实际飞行轨�
 默认路点要求绕过两面墙；修改 [waypoints.yaml](uav_path_planner/config/waypoints.yaml) 可指定自己的 ENU 路点。
 `Ctrl+C` 会先请求降落再退出。不要同时运行键盘控制入口。
 详细原理、约束、日志与话题见 [规划包说明](uav_path_planner/README.md)。
+
+考察未知障碍物触发避障与重规划时，使用以下两条命令：
+
+```bash
+# 终端 1，等待 READY
+./run_obstacle_scene.sh --mid360 --unknown-obstacles
+# 终端 2
+./run_ganyu_planner.sh --mid360 --start --rviz
+```
+
+三个航段开始跟踪后各生成一根橙红色障碍柱，位置分别为 ENU `(1.33,1.77)`、
+`(1.77,9.33)`、`(8,5.5)`，尺寸均为 `0.6×0.6×5 m`，落在原全局规划路线中。
+障碍物只通过 Gazebo 服务生成，不写入全局地图，规划器通过 MID-360 点云发现并绕行。
+结果保存在 `log/obstacle_scene/latest/unknown_obstacles.json`。
 
 ## 编译与准备
 
