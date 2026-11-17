@@ -1,0 +1,16 @@
+{
+  "ego_swarm": {
+    "repository": "https://github.com/ZJU-FAST-Lab/ego-planner-swarm",
+    "revision": "23a8d5a191711dd65633df689bd00f55d4dea8f9",
+    "archive_sha256": "56863d26de973fe4b6cf383709171eda85eec2406e8d46d9097558e400c34c84",
+    "selected_paths": ["src/planner", "src/uav_simulator/Utils/quadrotor_msgs"],
+    "license": "GPL-3.0"
+  },
+  "ego_v2": {
+    "repository": "https://github.com/ZJU-FAST-Lab/EGO-Planner-v2",
+    "revision": "9d85475ea7b9bf5c112cf7c3c3d0d3f9e96d9010",
+    "archive_sha256": "e5b1da27b0f74f1a68b096926ee9667fb9edf676238a7b6a20b0cba021d5221b",
+    "selected_paths": ["swarm-playground/main_ws/src/planner", "swarm-playground/main_ws/src/Utils/quadrotor_msgs"],
+    "license": "GPL-3.0"
+  }
+}

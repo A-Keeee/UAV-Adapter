@@ -1,0 +1,91 @@
+{
+  "purpose": "Raycast physics surfaces without changing original visual/collision geometry",
+  "rgl_source": "https://github.com/RobotecAI/RGLGazeboPlugin/blob/d4bf3cf36fe4a363a56df1bec2ce3809720db563/RGLServerPlugin/src/Scene.cc",
+  "models": [
+    {
+      "model": "assets/vendor/forest/Oak tree/model.sdf",
+      "surfaces": 1,
+      "sha256": "9f35b26373ac917740be62417f7195e045eabfe2215df1724b46ebfb32bc8e15"
+    },
+    {
+      "model": "assets/vendor/forest/Pine Tree/model.sdf",
+      "surfaces": 1,
+      "sha256": "67b7de995bc60885841e9ea12ed656e7110054dba6acfc49c2929d942958d5a3"
+    },
+    {
+      "model": "assets/vendor/forest/grasspatch/model.sdf",
+      "surfaces": 1,
+      "sha256": "481aa0ac9e0bf39d9871776f3d6695d7f1d5fed8bad8dc0f90afda4c117ef2f9"
+    },
+    {
+      "model": "assets/vendor/warehouse/models/aws_robomaker_warehouse_Bucket_01/model.sdf",
+      "surfaces": 1,
+      "sha256": "98589efedf168a25928d481bfd5fe5a58cfcd1cc7b6a1310bd16094c5f93b985"
+    },
+    {
+      "model": "assets/vendor/warehouse/models/aws_robomaker_warehouse_ClutteringA_01/model.sdf",
+      "surfaces": 1,
+      "sha256": "332764888bff7e5ef1af37aaf6e2c12afc6cccce784f800c383585f89ae52a78"
+    },
+    {
+      "model": "assets/vendor/warehouse/models/aws_robomaker_warehouse_ClutteringC_01/model.sdf",
+      "surfaces": 1,
+      "sha256": "58b8ba4a8533c7cf442583e01caf0d0514e46767c85f6aeb598fdeb6bf6ba171"
+    },
+    {
+      "model": "assets/vendor/warehouse/models/aws_robomaker_warehouse_ClutteringD_01/model.sdf",
+      "surfaces": 1,
+      "sha256": "f43457971a0d1684848625763a7d5054bef15c6126b8450a5e0a03550e80dc92"
+    },
+    {
+      "model": "assets/vendor/warehouse/models/aws_robomaker_warehouse_DeskC_01/model.sdf",
+      "surfaces": 1,
+      "sha256": "6727e54f0ecebb27731c40c2e3547d43fdf244d957e3fd432d07972885612373"
+    },
+    {
+      "model": "assets/vendor/warehouse/models/aws_robomaker_warehouse_GroundB_01/model.sdf",
+      "surfaces": 1,
+      "sha256": "d0677105dde5318c1182f291fefad5d32b32ea6ae8848131a77fc31140c7dbfc"
+    },
+    {
+      "model": "assets/vendor/warehouse/models/aws_robomaker_warehouse_Lamp_01/model.sdf",
+      "surfaces": 1,
+      "sha256": "f7207f695df3c80a4ffbe570ab53f6a26d00fa2c84b77479cd3573073437c283"
+    },
+    {
+      "model": "assets/vendor/warehouse/models/aws_robomaker_warehouse_PalletJackB_01/model.sdf",
+      "surfaces": 1,
+      "sha256": "5e0d52cabcfbbfc2ae1558cc6e14a5482bc1da841d9e9bec3d8d5235ddb5e54d"
+    },
+    {
+      "model": "assets/vendor/warehouse/models/aws_robomaker_warehouse_RoofB_01/model.sdf",
+      "surfaces": 1,
+      "sha256": "09337878d27b94195a08bbf2632bd00678650d8be18778dc758f75394caa3fcf"
+    },
+    {
+      "model": "assets/vendor/warehouse/models/aws_robomaker_warehouse_ShelfD_01/model.sdf",
+      "surfaces": 1,
+      "sha256": "a14acb138c157986d6a508e59e7c4654d194b74b009d130dbda9935d624d70e6"
+    },
+    {
+      "model": "assets/vendor/warehouse/models/aws_robomaker_warehouse_ShelfE_01/model.sdf",
+      "surfaces": 1,
+      "sha256": "75ff04d00878aa4cb86217f7deff018e0f200819118850eb9fce6e777479b68b"
+    },
+    {
+      "model": "assets/vendor/warehouse/models/aws_robomaker_warehouse_ShelfF_01/model.sdf",
+      "surfaces": 1,
+      "sha256": "1ecdb7079ab920a134e32fa52d9b1aa9f85b712548067fa7439d20b3fae4a984"
+    },
+    {
+      "model": "assets/vendor/warehouse/models/aws_robomaker_warehouse_TrashCanC_01/model.sdf",
+      "surfaces": 1,
+      "sha256": "e87c25d32aa9710ee0f9ad44fd606166446404abfe9d24af68fe944fc033990f"
+    },
+    {
+      "model": "assets/vendor/warehouse/models/aws_robomaker_warehouse_WallB_01/model.sdf",
+      "surfaces": 1,
+      "sha256": "44e4ce9900691cccbccfc6ee7a3e71a7b307ea03d571f5c9ad81b45b1ff571da"
+    }
+  ]
+}

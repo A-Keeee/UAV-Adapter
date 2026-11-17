@@ -1,0 +1,57 @@
+<?xml version='1.0' encoding='utf-8'?>
+<sdf version="1.9">
+  <model name="x500_os1_64">
+    <include merge="true">
+      <uri>model://x500_depth</uri>
+    </include>
+    <link name="os1_64_link">
+      <pose relative_to="base_link">0 0 0.15 0 0 0</pose>
+      <inertial>
+        <mass>0.425</mass>
+        <inertia>
+          <ixx>0.00044462083333333334</ixx>
+          <iyy>0.00044462083333333334</iyy>
+          <izz>0.0005117708333333334</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="mid360_collision">
+        <geometry>
+          <box>
+            <size>0.085 0.085 0.073</size>
+          </box>
+        </geometry>
+      </collision>
+      <visual name="mid360_housing">
+        <geometry>
+          <box>
+            <size>0.085 0.085 0.073</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>0.08 0.10 0.12 1</ambient>
+          <diffuse>0.12 0.15 0.18 1</diffuse>
+        </material>
+      </visual>
+      <sensor name="os1_64" type="custom">
+        <plugin filename="RGLServerPluginInstance" name="rgl::RGLServerPluginInstance">
+          <range>
+            <min>0.1</min>
+            <max>60</max>
+          </range>
+          <update_rate>10</update_rate>
+          <update_on_paused_sim>false</update_on_paused_sim>
+          <topic>/os1_64/points</topic>
+          <frame>os1_64_link</frame>
+          <pattern_preset>OS1 64</pattern_preset>
+        </plugin>
+      </sensor>
+    </link>
+    <joint name="os1_64_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>os1_64_link</child>
+    </joint>
+  </model>
+</sdf>

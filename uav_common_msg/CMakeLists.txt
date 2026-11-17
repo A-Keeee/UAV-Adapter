@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.16)
 project(uav_common_msg)
 
 # Default to C99
@@ -25,7 +25,7 @@ find_package(rosidl_default_generators REQUIRED)
 
 # get all msg files
 set(MSGS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/msg")
-file(GLOB UAV_COMMON_MSGS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "${MSGS_DIR}/*.msg")
+file(GLOB UAV_COMMON_MSGS CONFIGURE_DEPENDS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "${MSGS_DIR}/*.msg")
 
 
 # Generate introspection typesupport for C and C++ and IDL files

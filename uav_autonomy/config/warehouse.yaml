@@ -1,0 +1,23 @@
+autonomy:
+  ros__parameters:
+    use_sim_time: true
+    task: explore
+    auto_start: false
+    cloud_topic: /lidar/points
+    sensor_origin_frame: ""
+    # Fly above the 2.64 m low shelves, below the 6.53 m tall rack top.
+    # The launch column at (0,0) was checked independently against collisions.
+    takeoff_height: 3.8
+    flight_min_height: 3.6
+    flight_max_height: 5.8
+    max_velocity: 0.5
+    safety_radius: 0.65
+    obstacle_uncertainty_margin: 0.25
+    # Checked clear launch cylinder in these simulation scenes, not lidar capability.
+    launch_clearance_radius: 1.3
+    launch_clearance_height: 4.8
+    # Unknown angular coverage can require many guarded viewing moves. Allow
+    # the 0.18 m/s fallback to finish; the independent 120 s no-motion watchdog
+    # and all data/clearance checks still stop an unproductive or unsafe trial.
+    mission_timeout: 3600.0
+    exploration_timeout: 2400.0

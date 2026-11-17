@@ -1,0 +1,227 @@
+Panels:
+- Class: rviz_common/Displays
+  Name: Displays
+- Class: rviz_common/Views
+  Name: Views
+Visualization Manager:
+  Class: ''
+  Displays:
+  - Class: rviz_default_plugins/Grid
+    Name: 地面网格 / Grid
+    Enabled: true
+    Value: true
+    Cell Size: 1
+    Plane: XY
+    Reference Frame: odom
+    Plane Cell Count: 40
+    Color: 85; 88; 95
+    Alpha: 0.35
+  - Class: rviz_default_plugins/Axes
+    Name: 机体坐标轴 / Body axes
+    Enabled: true
+    Value: true
+    Reference Frame: base_link
+    Length: 0.7
+    Radius: 0.02
+  - Class: rviz_default_plugins/PointCloud2
+    Name: 实时点云 / Live XYZ
+    Enabled: true
+    Value: true
+    Topic:
+      Value: /autonomy/cloud
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Depth: 1
+    Position Transformer: XYZ
+    Color Transformer: AxisColor
+    Axis: Z
+    Autocompute Value Bounds: true
+    Style: Points
+    Size (Pixels): 2
+    Size (m): 0.035
+    Alpha: 1.0
+    Decay Time: 0
+    Use Fixed Frame: true
+  - Class: rviz_default_plugins/PointCloud2
+    Name: 已测障碍地图 / Occupied
+    Enabled: true
+    Value: true
+    Topic:
+      Value: /autonomy/occupied
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Depth: 1
+    Position Transformer: XYZ
+    Color Transformer: FlatColor
+    Axis: Z
+    Autocompute Value Bounds: true
+    Style: Points
+    Size (Pixels): 2
+    Size (m): 0.07
+    Alpha: 0.5
+    Decay Time: 0
+    Use Fixed Frame: true
+    Color: 255; 105; 70
+  - Class: rviz_default_plugins/PointCloud2
+    Name: 已观测空闲 / Free (optional)
+    Enabled: false
+    Value: false
+    Topic:
+      Value: /autonomy/observed_free
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Depth: 1
+    Position Transformer: XYZ
+    Color Transformer: FlatColor
+    Axis: Z
+    Autocompute Value Bounds: true
+    Style: Points
+    Size (Pixels): 2
+    Size (m): 0.035
+    Alpha: 0.08
+    Decay Time: 0
+    Use Fixed Frame: true
+    Color: 70; 140; 170
+  - Class: rviz_default_plugins/PointCloud2
+    Name: 原始雷达 / Raw (optional)
+    Enabled: false
+    Value: false
+    Topic:
+      Value: /autonomy/raw_cloud
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Depth: 1
+    Position Transformer: XYZ
+    Color Transformer: AxisColor
+    Axis: Z
+    Autocompute Value Bounds: true
+    Style: Points
+    Size (Pixels): 2
+    Size (m): 0.035
+    Alpha: 1.0
+    Decay Time: 0
+    Use Fixed Frame: true
+  - Class: rviz_default_plugins/Path
+    Name: 实际飞行 / Actual (blue)
+    Enabled: true
+    Value: true
+    Topic:
+      Value: /autonomy/visualization/actual_path
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Depth: 1
+    Color: 40; 160; 255
+    Alpha: 1
+    Line Style: Billboards
+    Line Width: 0.06
+    Buffer Length: 1
+    Pose Style: None
+  - Class: rviz_default_plugins/Path
+    Name: 控制参考 / Reference (magenta)
+    Enabled: true
+    Value: true
+    Topic:
+      Value: /autonomy/visualization/reference_path
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Depth: 1
+    Color: 225; 80; 230
+    Alpha: 1
+    Line Style: Billboards
+    Line Width: 0.04
+    Buffer Length: 1
+    Pose Style: None
+  - Class: rviz_default_plugins/Path
+    Name: 确认规划全段预览 / EGO (green)
+    Enabled: true
+    Value: true
+    Topic:
+      Value: /autonomy/visualization/confirmed_path
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Depth: 1
+    Color: 70; 245; 125
+    Alpha: 1
+    Line Style: Billboards
+    Line Width: 0.08
+    Buffer Length: 1
+    Pose Style: None
+  - Class: rviz_default_plugins/Path
+    Name: 候选规划预览 / Candidate (gray)
+    Enabled: false
+    Value: false
+    Topic:
+      Value: /autonomy/visualization/candidate_path
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Depth: 1
+    Color: 160; 165; 175
+    Alpha: 1
+    Line Style: Billboards
+    Line Width: 0.025
+    Buffer Length: 1
+    Pose Style: None
+  - Class: rviz_default_plugins/Path
+    Name: 最近室内连接 / Guide (orange)
+    Enabled: true
+    Value: true
+    Topic:
+      Value: /autonomy/global_path
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Depth: 1
+    Color: 255; 185; 45
+    Alpha: 1
+    Line Style: Billboards
+    Line Width: 0.035
+    Buffer Length: 1
+    Pose Style: None
+  - Class: rviz_default_plugins/MarkerArray
+    Name: 飞机、目标、速度和状态 / Status
+    Enabled: true
+    Value: true
+    Topic:
+      Value: /autonomy/visualization/markers
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+      Depth: 1
+    Queue Size: 5
+  Global Options:
+    Fixed Frame: odom
+    Background Color: 22; 25; 32
+    Frame Rate: 20
+  Tools:
+  - Class: rviz_default_plugins/Interact
+  - Class: rviz_default_plugins/MoveCamera
+  - Class: rviz_default_plugins/Select
+  - Class: rviz_default_plugins/FocusCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Follow vehicle
+      Target Frame: base_link
+      Distance: 18
+      Pitch: 0.7
+      Yaw: 0.9
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0.6
+      Near Clip Distance: 0.05
+Window Geometry:
+  Width: 1400
+  Height: 900
+  X: 40
+  Y: 40
+  Hide Left Dock: false
+  Hide Right Dock: false

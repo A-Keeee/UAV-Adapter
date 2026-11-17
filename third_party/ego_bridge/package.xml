@@ -1,0 +1,6 @@
+<package format="3"><name>ego_ganyu_bridge</name><version>0.1.0</version>
+<description>Native EGO trajectory and task bridge, without trajectory fitting.</description>
+<maintainer email="ake@example.com">ake</maintainer><license>BSD-3-Clause</license>
+<buildtool_depend>ament_cmake</buildtool_depend><depend>rclcpp</depend><depend>std_msgs</depend><depend>geometry_msgs</depend>
+<depend>uav_common_msg</depend><depend>traj_utils</depend><depend>quadrotor_msgs</depend>
+<export><build_type>ament_cmake</build_type></export></package>

@@ -75,7 +75,7 @@ public:
     const Vec3 dFd = params.mass * (-params.kp.cwiseProduct(zv) - params.kv.cwiseProduct(dzv) + ref.j);
     const Vec3 dr3d = skew(r3d) * skew(r3d) * dFd / Td;
     const double yaw = std::atan2(state.R(1, 0), state.R(0, 0));
-    // Same yaw P law as the source; target is the heading captured on takeoff.
+    // Original yaw P law; caller supplies the takeoff or external heading.
     const double yaw_error = std::remainder(yaw - yaw_reference, 2.0 * std::acos(-1.0));
     Command out;
     out.omega = -skew(e3) * skew(e3) * (
@@ -145,4 +145,20 @@ private:
   Vec3 goal_ = Vec3::Zero();
   double start_ = 0, duration_ = 0;
 };
+
+// A separate emergency manoeuvre. Planner trajectories are never fitted to this
+// polynomial. The guard and controller use the same complete braking curve.
+inline std::pair<SmoothReference,double> brakingReference(const Reference &from,double time) {
+  for (double duration=2.0;duration<=12;duration+=.5) {
+    SmoothReference brake;
+    brake.moveFrom(from,from.p+from.v*(duration*.5)+from.a*(duration*duration/12),time,duration);
+    bool valid=true;
+    for (double t=0;t<=duration;t+=.025) {
+      const auto sample=brake.sample(time+t);
+      if (sample.v.norm()>1.+1e-6 || sample.a.norm()>.7+1e-6 || sample.j.norm()>1.5+1e-6) {valid=false;break;}
+    }
+    if (valid) return {brake,duration};
+  }
+  throw std::runtime_error("No dynamically admissible braking reference");
+}
 } // namespace uav_ganyu_control

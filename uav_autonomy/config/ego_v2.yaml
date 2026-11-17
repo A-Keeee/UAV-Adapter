@@ -1,0 +1,63 @@
+ego_planner_node:
+  ros__parameters:
+    fsm/thresh_replan_time: 0.5
+    fsm/emergency_time: 1.0
+    fsm/realworld_experiment: false
+    fsm/fail_safe: true
+    grid_map/resolution: 0.2
+    grid_map/local_update_range_x: 10.0
+    grid_map/local_update_range_y: 10.0
+    grid_map/local_update_range_z: 4.0
+    # Match the guard's 0.65 m clearance + 0.15 m uncertainty + one
+    # 0.2 m stopping-reserve voxel. Native voxel geometry is handled below
+    # this metric radius; it must not silently coarsen the 0.2 m map.
+    grid_map/obstacles_inflation: 1.00
+    grid_map/local_map_margin: 10
+    grid_map/enable_virtual_wall: true
+    # Plan inside the unchanged hard execution envelope [1.5, 2.3].
+    grid_map/virtual_ceil: 2.2
+    grid_map/virtual_ground: 1.6
+    grid_map/ground_height: -0.01
+    grid_map/use_depth_filter: true
+    grid_map/k_depth_scaling_factor: 1000.0
+    grid_map/skip_pixel: 2
+    grid_map/p_hit: 0.65
+    grid_map/p_miss: 0.35
+    grid_map/p_min: 0.12
+    grid_map/p_max: 0.9
+    grid_map/p_occ: 0.8
+    grid_map/fading_time: -1.0
+    grid_map/visualization_truncate_height: 1.9
+    grid_map/show_occ_time: false
+    grid_map/pose_type: 1
+    grid_map/frame_id: odom
+    manager/polyTraj_piece_length: 1.5
+    manager/feasibility_tolerance: 0.05
+    # At low speed a 1.5 m piece spans many seconds. Sample native collision
+    # constraints more densely so an altitude excursion cannot hide between
+    # the original five constraint points.
+    optimization/constraint_points_perPiece: 15
+    optimization/weight_obstacle: 10000.0
+    optimization/weight_obstacle_soft: 5000.0
+    optimization/weight_swarm: 10000.0
+    # Native penalties use (|v|^2-vmax^2)^3; low-speed operation needs a
+    # stronger feasibility/time ratio than the upstream high-speed demo.
+    optimization/weight_feasibility: 1000000000.0
+    optimization/weight_sqrvariance: 10000.0
+    optimization/weight_time: 0.1
+    optimization/obstacle_clearance: 0.1
+    optimization/obstacle_clearance_soft: 0.5
+    optimization/swarm_clearance: 0.15000000000000002
+    optimization/record_opt: true
+    use_sim_time: true
+    fsm/flight_type: 1
+    fsm/waypoint_num: 0
+    fsm/planning_horizon: 5.0
+    manager/max_vel: 0.28
+    manager/max_acc: 0.38
+    manager/planning_horizon: 5.0
+    manager/drone_id: 0
+    manager/use_multitopology_trajs: false
+    optimization/max_vel: 0.28
+    optimization/max_acc: 0.38
+    optimization/max_jer: 0.8

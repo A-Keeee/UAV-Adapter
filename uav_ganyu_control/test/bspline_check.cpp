@@ -23,6 +23,23 @@ int main() {
   for (const auto &bad : {std::vector<double>{}, std::vector<double>(16, 0)}) {
     try { spline.set(7, bad, points); return 3; } catch (const std::runtime_error &) {}
   }
+  for(const Vec3 &v:{Vec3::Zero().eval(),Vec3(.3,.2,-.1),Vec3(.7,0,0)}) {
+    Reference moving;moving.p=Vec3(1,2,3);moving.v=v;moving.a=Vec3(.1,0,0);moving.j=Vec3(.05,0,0);
+    auto brake=brakingReference(moving,10);
+    auto first=brake.first.sample(10),last=brake.first.sample(10+brake.second);
+    if((first.p-moving.p).norm()>1e-8 || (first.v-moving.v).norm()>1e-8 ||
+       (first.a-moving.a).norm()>1e-8 || (first.j-moving.j).norm()>1e-8 || last.v.norm()>1e-8 || last.a.norm()>1e-8 || last.j.norm()>1e-8)return 4;
+    for(double t=0;t<=brake.second;t+=.01){auto r=brake.first.sample(10+t);if(r.v.norm()>1.00001 || r.a.norm()>.70001 || r.j.norm()>1.50001){std::cerr<<"Brake exceeded V/A/J limits: "<<r.v.norm()<<' '<<r.a.norm()<<' '<<r.j.norm()<<'\n';return 5;}}
+  }
+  for (int axis=0;axis<3;++axis) {
+    Reference invalid;
+    if(axis==0)invalid.v=Vec3(1.01,0,0);
+    if(axis==1)invalid.a=Vec3(.71,0,0);
+    if(axis==2)invalid.j=Vec3(1.51,0,0);
+    bool rejected=false;
+    try{(void)brakingReference(invalid,10);}catch(const std::runtime_error &){rejected=true;}
+    if(!rejected){std::cerr<<"Brake accepted a reference beyond the 1/.7/1.5 limits, axis "<<axis<<'\n';return 6;}
+  }
   std::cout << "B-spline analytic p/v/a/jerk, endpoint hold and malformed input checks passed\n";
   return 0;
 }

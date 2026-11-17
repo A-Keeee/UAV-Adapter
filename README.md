@@ -1,11 +1,52 @@
 # Gazebo 单机无人机仿真与控制验证平台
 
-基于 ROS 2 Humble、PX4 SITL 和 Gazebo Harmonic，使用余老师的
-`QuadrotorControllerGanYu` 完成单机键盘飞行控制，支持相机图像与 MID-360 仿真点云显示。
-支持键盘飞行，以及 **给定路点 → 三维 A* 避障搜索 → 七次 B 样条 → GanYu 跟踪 → 降落**。
-航点规划、MID-360 点云处理和任务执行统一使用 C++。
-规划器使用 Walls 场景的静态碰撞地图；`--mid360` 启用实时点云动态避障：前方受阻时制动悬停、
-结合最新点云绕障重规划并继续航点任务。仅保留短时局部障碍物，不做雷达建图。
+本工作空间基于 **ROS 2 Humble＋Gazebo Harmonic＋PX4 SITL定位＋GanYu控制器**，支持两类未知环境任务：
+
+- **仓库探索与巡飞**：OctoMap＋三维Frontier＋EGO-Swarm，从空白地图探索，保存地图，完成至少四点巡飞、返航与降落。
+- **树林A→B穿越**：EGO-Planner-v2原生滚动局部地图＋MINCO，实时避障完成80 m目标航程，悬停确认并降落，不建立全局地图。
+
+三种仿真雷达为 **MID-360、前向Livox Avia、Ouster OS1-64**。外部PointCloud2无需登记型号或填写FOV、盲区、线数、量程；须提供正确XYZ、采样时间、TF与测量原点。
+
+## 当前验收结果
+
+**2026-11-16运行验收完成，30/30通过。** 本次已重新运行独立发布审计，`complete=true`、`issues=[]`。
+
+- 18/18组正常飞行通过当前交付版本核验，4/4类物理故障响应通过，22/22份最新录包核验通过。
+- 软件回归：任务17项、GanYu6项、索引1项；点云接口17/17，实际OS1 64→16通道回放1/1通过。
+- 正常飞行零障碍碰撞；最小实测间距约1.215 m，最大单次跟踪RMSE 0.0823 m，最大航点误差0.213 m。
+- 仓库保存地图覆盖率98.05%～99.82%；树林观测与原生环形缓存容量固定。
+
+三组条件是固定场景下的 **0°／+45°／−45°初始航向**，不代表三个地图种子。本轮使用PX4仿真定位，不含真实硬件、无GPS定位或跨重启重定位；ODIN1不纳入。
+
+当前验收批次为 `log/manual_acceptance/20261116_040954_1261551_scoring_lifecycle`。查看 [六种组合结果与逐次证据](log/manual_acceptance/20261116_040954_1261551_scoring_lifecycle/results/README.md)、[机器核验](log/manual_acceptance/20261116_040954_1261551_scoring_lifecycle/audit.json) 和 [本次独立复核](log/release_review_20261116/audit.json)。详细使用方式见 [未知环境任务README](uav_autonomy/README.md)，消息及坐标规则见 [接口说明](docs/autonomy_interfaces.md)，开发过程见 [实施记录](docs/autonomy_implementation.md)。
+
+## 未知环境任务快速启动
+
+所有命令在工作空间根目录执行。先在终端1启动一种场景：
+
+```bash
+./run_autonomy_scene.sh --world warehouse --lidar mid360
+```
+
+默认自动执行任务会录制 ROS bag，退出时压缩并校验。日常调试可加 `--no-record` 关闭录包，例如 `./run_autonomy.sh --task forest --start --no-record`；仍保留文字日志、配置、任务结果及评估输出。需要回放数据时加 `--record`（默认开启）。关闭录包的运行不具备录包回放验收证据。
+
+等待 `verified; vehicle remains unarmed.`，保持场景运行，在终端2启动仓库任务：
+
+```bash
+./run_autonomy.sh --task explore --start
+```
+
+树林任务将终端1改为 `./run_autonomy_scene.sh --world forest_long --lidar avia`，终端2改为 `./run_autonomy.sh --task forest --start`。场景端 `--lidar`可选 `mid360`、`avia`、`os1_64`；每轮使用新的场景会话，避免同时运行多套控制器。地图巡飞入口为 `./run_map_patrol.sh`，外部点云接入见 [任务README](uav_autonomy/README.md#4-未登记雷达接入)。
+
+场景和任务启动后，在第三个终端运行 `./view_autonomy.sh`，打开点云、障碍地图、EGO规划曲线、实际轨迹及速度／阶段显示。该入口只读，不参与控制。详见 [RViz说明](uav_autonomy/README.md#rviz可视化)。
+
+调速修改 [warehouse.yaml](uav_autonomy/config/warehouse.yaml) 或 [forest.yaml](uav_autonomy/config/forest.yaml) 的 `max_velocity`，例如0.3 m/s；新任务会话生效，无需重新编译。默认0.5 m/s，实际速度可因避障和观测而降低，具体见 [速度说明](uav_autonomy/README.md#调整飞行速度)。
+
+`./run_acceptance.sh status`查看当前完成结果；默认入口在本批完成后不会重复起飞。需要独立完整重跑时使用 `./run_acceptance.sh --fresh`。构建、续跑和磁盘要求见 [手动验收指南](docs/manual_acceptance.md)。
+
+## 原有键盘与A*演示
+
+原键盘、相机图像、MID-360点云显示和 **给定路点→三维A*避障→七次B样条→GanYu跟踪→降落**入口继续保留。旧A*演示使用Walls静态碰撞地图；`--mid360`启用实时点云动态避障和短时局部障碍物。新EGO任务使用各自原始轨迹，不重新拟合为七次曲线。
 
 ## 航点规划与避障演示
 

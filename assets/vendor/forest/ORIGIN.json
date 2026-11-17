@@ -1,0 +1,23 @@
+{
+  "Pine Tree": {
+    "owner": "OpenRobotics",
+    "version": 6,
+    "url": "https://fuel.gazebosim.org/1.0/OpenRobotics/models/Pine%20Tree/6/Pine%20Tree.zip",
+    "sha256": "d436a44229321314e79e4c2ba709dc926e833a5b5d90d16c5d085c2a74576e25",
+    "license": "CC0-1.0"
+  },
+  "Oak tree": {
+    "owner": "OpenRobotics",
+    "version": 7,
+    "url": "https://fuel.gazebosim.org/1.0/OpenRobotics/models/Oak%20tree/7/Oak%20tree.zip",
+    "sha256": "ae128176f707b571d2a2a47a1ab6b80596e81d96402501a64f4f28a49543daa5",
+    "license": "CC0-1.0"
+  },
+  "grasspatch": {
+    "owner": "hexarotor",
+    "version": 1,
+    "url": "https://fuel.gazebosim.org/1.0/hexarotor/models/grasspatch/1/grasspatch.zip",
+    "sha256": "23d8b5eac474368b57d1bea9f831d5bf04ac39e45d7b311422434ad43b0a5d6b",
+    "license": "CC-BY-4.0"
+  }
+}

@@ -1,0 +1,3049 @@
+--- /dev/null
++++ b/ros2_adapter/CMakeLists.txt
+@@ -0,0 +1,8 @@
++cmake_minimum_required(VERSION 3.16)
++project(ego_ros2)
++find_package(ament_cmake REQUIRED)
++find_package(rclcpp REQUIRED)
++install(DIRECTORY include/ DESTINATION include)
++ament_export_include_directories(include)
++ament_export_dependencies(rclcpp)
++ament_package()
+--- /dev/null
++++ b/ros2_adapter/include/ego_ros2/runtime.hpp
+@@ -0,0 +1,95 @@
++#pragma once
++// Only middleware compatibility lives here. No ROS 1 libraries, master, message
++// transport, geometry, map storage or optimisation are used by this adapter.
++#include <rclcpp/rclcpp.hpp>
++#include <rclcpp/create_timer.hpp>
++#include <chrono>
++#include <thread>
++#include <functional>
++
++namespace ego_ros2 {
++inline rclcpp::Node::SharedPtr node;
++struct Duration {
++  double value;
++  explicit Duration(double seconds=0):value(seconds){}
++  double toSec()const{return value;}
++  Duration operator-(Duration b)const{return Duration(value-b.value);}
++  Duration operator+(Duration b)const{return Duration(value+b.value);}
++  void sleep()const{std::this_thread::sleep_for(std::chrono::duration<double>(value));}
++};
++class Time {
++public:
++  Time(double seconds=0):value_(seconds){}
++  Time(const builtin_interfaces::msg::Time &m):value_(m.sec+m.nanosec*1e-9){}
++  static Time now(){return Time(node->now().seconds());}
++  double toSec()const{return value_;}
++  Time &fromSec(double seconds){value_=seconds;return *this;}
++  operator builtin_interfaces::msg::Time()const{return rclcpp::Time(int64_t(value_*1e9),RCL_ROS_TIME);}
++  Duration operator-(Time b)const{return Duration(value_-b.value_);}
++  Time operator+(Duration d)const{return Time(value_+d.value);}
++  Time operator-(Duration d)const{return Time(value_-d.value);}
++  bool operator<(Time b)const{return value_<b.value_;}
++  bool operator>(Time b)const{return value_>b.value_;}
++  bool operator<=(Time b)const{return value_<=b.value_;}
++  bool operator==(Time b)const{return value_==b.value_;}
++private:double value_;
++};
++struct TimerEvent {};
++class Timer {
++public:
++  rclcpp::TimerBase::SharedPtr handle;
++  void stop(){if(handle)handle->cancel();}
++  void start(){if(handle)handle->reset();}
++};
++struct TransportHints {TransportHints &tcpNoDelay(){return *this;}};
++class Publisher {
++public:
++  rclcpp::PublisherBase::SharedPtr handle;
++  template<class M>void publish(const M &m)const {
++    auto p=std::dynamic_pointer_cast<rclcpp::Publisher<M>>(handle);
++    if(!p)throw std::runtime_error("EGO publisher message type mismatch");p->publish(m);
++  }
++  size_t getNumSubscribers()const{return handle?handle->get_subscription_count():0;}
++};
++using Subscriber=rclcpp::SubscriptionBase::SharedPtr;
++class NodeHandle {
++public:
++  explicit NodeHandle(const std::string & = ""){}
++  template<class T>void param(const std::string &name,T &value,const T &fallback) {
++    if(!node->has_parameter(name))node->declare_parameter<T>(name,fallback);
++    node->get_parameter(name,value);
++  }
++  template<class M>Publisher advertise(const std::string &topic,int depth) {
++    Publisher p;p.handle=node->create_publisher<M>(topic,depth);return p;
++  }
++  template<class M,class C>Subscriber subscribe(const std::string &topic,int depth,void(C::*cb)(const std::shared_ptr<const M>&),C *self,TransportHints={}) {
++    return node->create_subscription<M>(topic,rclcpp::SensorDataQoS().keep_last(depth),[self,cb](std::shared_ptr<const M> m){(self->*cb)(m);});
++  }
++  template<class M,class C>Subscriber subscribe(const std::string &topic,int depth,void(C::*cb)(std::shared_ptr<const M>),C *self,TransportHints={}) {
++    return node->create_subscription<M>(topic,rclcpp::SensorDataQoS().keep_last(depth),[self,cb](std::shared_ptr<const M> m){(self->*cb)(m);});
++  }
++  template<class M>Subscriber subscribe(const std::string &topic,int depth,void(*cb)(const std::shared_ptr<const M>&)) {
++    return node->create_subscription<M>(topic,rclcpp::SensorDataQoS().keep_last(depth),cb);
++  }
++  template<class M,class C>Subscriber subscribe(const std::string &topic,int depth,void(C::*cb)(const std::shared_ptr<M>&),C *self,TransportHints={}) {
++    return node->create_subscription<M>(topic,rclcpp::SensorDataQoS().keep_last(depth),[self,cb](std::shared_ptr<M> m){(self->*cb)(m);});
++  }
++  template<class M,class C>Subscriber subscribe(const std::string &topic,int depth,void(C::*cb)(const M&),C *self,TransportHints={}) {
++    return node->create_subscription<M>(topic,rclcpp::SensorDataQoS().keep_last(depth),[self,cb](std::shared_ptr<const M> m){(self->*cb)(*m);});
++  }
++  template<class C>Timer createTimer(Duration duration,void(C::*cb)(const TimerEvent &),C *self) {
++    Timer t;t.handle=rclcpp::create_timer(node,node->get_clock(),std::chrono::duration<double>(duration.value),[self,cb](){(self->*cb)(TimerEvent{});});return t;
++  }
++};
++inline void init(int argc,char **argv,const std::string &name){rclcpp::init(argc,argv);node=std::make_shared<rclcpp::Node>(name);}
++inline bool ok(){return rclcpp::ok();}
++inline void spin(){rclcpp::spin(node);}
++inline void spinOnce(){rclcpp::spin_some(node);}
++inline void shutdown(){rclcpp::shutdown();}
++}
++#define ROS_INFO(...) RCLCPP_INFO(ego_ros2::node->get_logger(),__VA_ARGS__)
++#define ROS_WARN(...) RCLCPP_WARN(ego_ros2::node->get_logger(),__VA_ARGS__)
++#define ROS_ERROR(...) RCLCPP_ERROR(ego_ros2::node->get_logger(),__VA_ARGS__)
++#define ROS_ERROR_ONCE(...) RCLCPP_ERROR_ONCE(ego_ros2::node->get_logger(),__VA_ARGS__)
++#define ROS_WARN_COND(condition,...) do {if(condition) ROS_WARN(__VA_ARGS__);} while(false)
++#define ROS_ERROR_COND(condition,...) do {if(condition) ROS_ERROR(__VA_ARGS__);} while(false)
+--- /dev/null
++++ b/ros2_adapter/package.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0"?>
++<package format="3"><name>ego_ros2</name><version>0.1.0</version>
++<description>ROS 2 middleware adapter for the pinned EGO-v2 numerical code.</description>
++<maintainer email="ake@example.com">ake</maintainer><license>BSD-3-Clause</license>
++<buildtool_depend>ament_cmake</buildtool_depend><depend>rclcpp</depend>
++<export><build_type>ament_cmake</build_type></export></package>
+--- a/swarm-playground/main_ws/src/Utils/quadrotor_msgs/CMakeLists.txt
++++ b/swarm-playground/main_ws/src/Utils/quadrotor_msgs/CMakeLists.txt
+@@ -1,110 +1,10 @@
+-#-cmake_minimum_required(VERSION 2.4.6)
+-#-include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
+-
+-# Set the build type.  Options are:
+-#  Coverage       : w/ debug symbols, w/o optimization, w/ code-coverage
+-#  Debug          : w/ debug symbols, w/o optimization
+-#  Release        : w/o debug symbols, w/ optimization
+-#  RelWithDebInfo : w/ debug symbols, w/ optimization
+-#  MinSizeRel     : w/o debug symbols, w/ optimization, stripped binaries
+-#set(ROS_BUILD_TYPE RelWithDebInfo)
+-
+-#-rosbuild_init()
+-
+-#set the default path for built executables to the "bin" directory
+-#-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
+-#set the default path for built libraries to the "lib" directory
+-#-set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
+-
+-#uncomment if you have defined messages
+-#rosbuild_genmsg()
+-#uncomment if you have defined services
+-#rosbuild_gensrv()
+-
+-#common commands for building c++ executables and libraries
+-#-\rosbuild_add_library(${PROJECT_NAME} src/example.cpp)
+-#target_link_libraries(${PROJECT_NAME} another_library)
+-#rosbuild_add_boost_directories()
+-#rosbuild_link_boost(${PROJECT_NAME} thread)
+-#rosbuild_add_executable(example examples/example.cpp)
+-#target_link_libraries(example ${PROJECT_NAME})
+-
+-#-rosbuild_add_library(encode_msgs src/encode_msgs.cpp)
+-#-rosbuild_add_link_flags(encode_msgs -Wl,--as-needed)
+-
+-#list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+-#find_package(Eigen3 REQUIRED)
+-
+-#include_directories(${EIGEN3_INCLUDE_DIR})
+-#-rosbuild_add_library(decode_msgs src/decode_msgs.cpp)
+-#-rosbuild_add_link_flags(decode_msgs -Wl,--as-needed)
+-
+-#------------------------------------------------------------------
+-cmake_minimum_required(VERSION 2.8.3)
++cmake_minimum_required(VERSION 3.16)
+ project(quadrotor_msgs)
+-
+-find_package(catkin REQUIRED COMPONENTS
+-  #armadillo
+-  roscpp
+-  nav_msgs
+-  geometry_msgs
+-  message_generation
+-)
+-
+-set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+-
+-include_directories(
+-    ${catkin_INCLUDE_DIRS}
+-    include
+-    )
+-
+-
+-add_message_files(
+-  FILES
+-  AuxCommand.msg
+-  Corrections.msg
+-  Gains.msg
+-  OutputData.msg
+-  PositionCommand.msg
+-  PPROutputData.msg
+-  Serial.msg
+-  SO3Command.msg
+-  StatusData.msg
+-  TRPYCommand.msg
+-  Odometry.msg
+-  PolynomialTrajectory.msg
+-  LQRTrajectory.msg
+-  GoalSet.msg
+-)
+-
+-generate_messages(
+-    DEPENDENCIES
+-    geometry_msgs
+-    nav_msgs
+-)
+-
+-catkin_package(
+-  #INCLUDE_DIRS include
+-  LIBRARIES encode_msgs decode_msgs
+-  #CATKIN_DEPENDS geometry_msgs nav_msgs
+-  #DEPENDS system_lib
+-  CATKIN_DEPENDS message_runtime
+-)
+-
+-# add_executable(test_exe src/test_exe.cpp)
+-add_library(decode_msgs src/decode_msgs.cpp)
+-add_library(encode_msgs src/encode_msgs.cpp)
+-
+-# add_dependencies(test_exe quadrotor_msgs_generate_messages_cpp)
+-add_dependencies(encode_msgs quadrotor_msgs_generate_messages_cpp)
+-add_dependencies(decode_msgs quadrotor_msgs_generate_messages_cpp)
+-
+-find_package(Eigen3 REQUIRED)
+-include_directories(${EIGEN3_INCLUDE_DIR})
+-
+-
+-# target_link_libraries(test_exe 
+-#     decode_msgs 
+-#     encode_msgs
+-# )
+-
++find_package(ament_cmake REQUIRED)
++find_package(rosidl_default_generators REQUIRED)
++find_package(std_msgs REQUIRED)
++find_package(geometry_msgs REQUIRED)
++find_package(builtin_interfaces REQUIRED)
++rosidl_generate_interfaces(${PROJECT_NAME} "msg/GoalSet.msg" "msg/PositionCommand.msg" DEPENDENCIES std_msgs geometry_msgs builtin_interfaces)
++ament_export_dependencies(rosidl_default_runtime)
++ament_package()
+--- a/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/LQRTrajectory.msg
++++ b/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/LQRTrajectory.msg
+@@ -1,4 +1,4 @@
+-Header header
++std_msgs/Header header
+ 
+ # the trajectory id, starts from "1".
+ uint32 trajectory_id
+--- a/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/OutputData.msg
++++ b/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/OutputData.msg
+@@ -1,4 +1,4 @@
+-Header header
++std_msgs/Header header
+ uint16 loop_rate
+ float64 voltage
+ geometry_msgs/Quaternion orientation
+--- a/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/PPROutputData.msg
++++ b/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/PPROutputData.msg
+@@ -1,4 +1,4 @@
+-Header header
++std_msgs/Header header
+ uint16 quad_time
+ float64 des_thrust
+ float64 des_roll
+--- a/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/PolynomialTrajectory.msg
++++ b/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/PolynomialTrajectory.msg
+@@ -1,4 +1,4 @@
+-Header header
++std_msgs/Header header
+ 
+ # the trajectory id, starts from "1".
+ uint32 trajectory_id
+--- a/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/PositionCommand.msg
++++ b/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/PositionCommand.msg
+@@ -1,4 +1,4 @@
+-Header header
++std_msgs/Header header
+ geometry_msgs/Point position
+ geometry_msgs/Vector3 velocity
+ geometry_msgs/Vector3 acceleration
+--- a/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/SO3Command.msg
++++ b/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/SO3Command.msg
+@@ -1,4 +1,4 @@
+-Header header
++std_msgs/Header header
+ geometry_msgs/Vector3 force
+ geometry_msgs/Quaternion orientation
+ float64[3] kR
+--- a/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/Serial.msg
++++ b/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/Serial.msg
+@@ -7,7 +7,7 @@
+ uint8 PPR_OUTPUT_DATA = 116 # 't' in base 10
+ uint8 PPR_GAINS = 103 # 'g'
+ 
+-Header header
++std_msgs/Header header
+ uint8 channel
+ uint8 type # One of the types listed above
+ uint8[] data
+--- a/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/StatusData.msg
++++ b/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/StatusData.msg
+@@ -1,4 +1,4 @@
+-Header header
++std_msgs/Header header
+ uint16 loop_rate
+ float64 voltage
+ uint8 seq
+--- a/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/TRPYCommand.msg
++++ b/swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/TRPYCommand.msg
+@@ -1,4 +1,4 @@
+-Header header
++std_msgs/Header header
+ float32 thrust
+ float32 roll
+ float32 pitch
+--- a/swarm-playground/main_ws/src/Utils/quadrotor_msgs/package.xml
++++ b/swarm-playground/main_ws/src/Utils/quadrotor_msgs/package.xml
+@@ -1,20 +1 @@
+-<package>
+-  <name>quadrotor_msgs</name>
+-  <version>0.0.0</version>
+-  <description>quadrotor_msgs</description>
+-  <maintainer email="todo@todo.todo">Kartik Mohta</maintainer>
+-  <url>http://ros.org/wiki/quadrotor_msgs</url>
+-  <license>BSD</license>
+-  <buildtool_depend>catkin</buildtool_depend>
+-  <build_depend>geometry_msgs</build_depend>
+-  <build_depend>nav_msgs</build_depend>
+-  <build_depend>message_generation</build_depend>
+-  <run_depend>geometry_msgs</run_depend>
+-  <run_depend>nav_msgs</run_depend>
+-  <run_depend>message_runtime</run_depend>
+-  <export>
+-    <cpp cflags="-I${prefix}/include"
+-         lflags="-Wl,-rpath,${prefix}/lib -L${prefix}/lib"/>
+-  </export>
+-
+-</package>
++<package format="3"><name>quadrotor_msgs</name><version>0.1.0</version><description>EGO-v2 messages</description><maintainer email="ake@example.com">ake</maintainer><license>BSD</license><buildtool_depend>ament_cmake</buildtool_depend><buildtool_depend>rosidl_default_generators</buildtool_depend><depend>std_msgs</depend><depend>geometry_msgs</depend><depend>builtin_interfaces</depend><exec_depend>rosidl_default_runtime</exec_depend><member_of_group>rosidl_interface_packages</member_of_group><export><build_type>ament_cmake</build_type></export></package>
+--- a/swarm-playground/main_ws/src/planner/path_searching/CMakeLists.txt
++++ b/swarm-playground/main_ws/src/planner/path_searching/CMakeLists.txt
+@@ -1,42 +1,27 @@
+-cmake_minimum_required(VERSION 2.8.3)
++cmake_minimum_required(VERSION 3.16)
+ project(path_searching)
+-
+-set(CMAKE_BUILD_TYPE "Release")
+-ADD_COMPILE_OPTIONS(-std=c++11 )
+-ADD_COMPILE_OPTIONS(-std=c++14 )
+-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
+-
++set(CMAKE_CXX_STANDARD 17)
++find_package(ament_cmake REQUIRED)
+ find_package(Eigen3 REQUIRED)
+-find_package(PCL 1.7 REQUIRED)
+-
+-find_package(catkin REQUIRED COMPONENTS
+-  roscpp
+-  rospy
+-  std_msgs
+-  visualization_msgs
+-  plan_env
+-  cv_bridge
+-)
+-
+-
+-catkin_package(
+- INCLUDE_DIRS include
+- LIBRARIES path_searching
+- CATKIN_DEPENDS plan_env
+-#  DEPENDS system_lib
+-)
+-
+-include_directories( 
+-    SYSTEM 
+-    include 
+-    ${catkin_INCLUDE_DIRS}
+-    ${Eigen3_INCLUDE_DIRS} 
+-    ${PCL_INCLUDE_DIRS}
+-)
+-
+-add_library( path_searching 
+-    src/dyn_a_star.cpp
+-    )
+-target_link_libraries( path_searching
+-    ${catkin_LIBRARIES} 
+-    )  
++find_package(PCL REQUIRED COMPONENTS common)
++find_package(OpenCV REQUIRED)
++find_package(rclcpp REQUIRED)
++find_package(std_msgs REQUIRED)
++find_package(sensor_msgs REQUIRED)
++find_package(geometry_msgs REQUIRED)
++find_package(nav_msgs REQUIRED)
++find_package(visualization_msgs REQUIRED)
++find_package(cv_bridge REQUIRED)
++find_package(pcl_conversions REQUIRED)
++find_package(ego_ros2 REQUIRED)
++find_package(plan_env REQUIRED)
++add_library(path_searching_lib SHARED src/dyn_a_star.cpp)
++target_include_directories(path_searching_lib PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include> ${PCL_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
++target_link_libraries(path_searching_lib Eigen3::Eigen ${PCL_LIBRARIES} ${OpenCV_LIBRARIES})
++ament_target_dependencies(path_searching_lib rclcpp std_msgs sensor_msgs geometry_msgs nav_msgs visualization_msgs cv_bridge pcl_conversions ego_ros2 plan_env)
++install(TARGETS path_searching_lib DESTINATION lib)
++install(DIRECTORY include/ DESTINATION include)
++ament_export_libraries(path_searching_lib)
++ament_export_include_directories(include)
++ament_export_dependencies(rclcpp std_msgs sensor_msgs geometry_msgs nav_msgs visualization_msgs cv_bridge pcl_conversions ego_ros2 plan_env)
++ament_package()
+--- a/swarm-playground/main_ws/src/planner/path_searching/include/path_searching/dyn_a_star.h
++++ b/swarm-playground/main_ws/src/planner/path_searching/include/path_searching/dyn_a_star.h
+@@ -2,8 +2,8 @@
+ #define _DYN_A_STAR_H_
+ 
+ #include <iostream>
+-#include <ros/ros.h>
+-#include <ros/console.h>
++#include <ego_ros2/runtime.hpp>
++#include <ego_ros2/runtime.hpp>
+ #include <Eigen/Eigen>
+ #include <plan_env/grid_map.h>
+ #include <queue>
+--- a/swarm-playground/main_ws/src/planner/path_searching/package.xml
++++ b/swarm-playground/main_ws/src/planner/path_searching/package.xml
+@@ -1,71 +1 @@
+-<?xml version="1.0"?>
+-<package format="2">
+-  <name>path_searching</name>
+-  <version>0.0.0</version>
+-  <description>The path_searching package</description>
+-
+-  <!-- One maintainer tag required, multiple allowed, one person per tag -->
+-  <!-- Example:  -->
+-  <!-- <maintainer email="jane.doe@example.com">Jane Doe</maintainer> -->
+-  <maintainer email="iszhouxin@zju.edu.cn">iszhouxin</maintainer>
+-
+-
+-  <!-- One license tag required, multiple allowed, one license per tag -->
+-  <!-- Commonly used license strings: -->
+-  <!--   BSD, MIT, Boost Software License, GPLv2, GPLv3, LGPLv2.1, LGPLv3 -->
+-  <license>TODO</license>
+-
+-
+-  <!-- Url tags are optional, but multiple are allowed, one per tag -->
+-  <!-- Optional attribute type can be: website, bugtracker, or repository -->
+-  <!-- Example: -->
+-  <!-- <url type="website">http://wiki.ros.org/path_searching</url> -->
+-
+-
+-  <!-- Author tags are optional, multiple are allowed, one per tag -->
+-  <!-- Authors do not have to be maintainers, but could be -->
+-  <!-- Example: -->
+-  <!-- <author email="jane.doe@example.com">Jane Doe</author> -->
+-
+-
+-  <!-- The *depend tags are used to specify dependencies -->
+-  <!-- Dependencies can be catkin packages or system dependencies -->
+-  <!-- Examples: -->
+-  <!-- Use depend as a shortcut for packages that are both build and exec dependencies -->
+-  <!--   <depend>roscpp</depend> -->
+-  <!--   Note that this is equivalent to the following: -->
+-  <!--   <build_depend>roscpp</build_depend> -->
+-  <!--   <exec_depend>roscpp</exec_depend> -->
+-  <!-- Use build_depend for packages you need at compile time: -->
+-  <!--   <build_depend>message_generation</build_depend> -->
+-  <!-- Use build_export_depend for packages you need in order to build against this package: -->
+-  <!--   <build_export_depend>message_generation</build_export_depend> -->
+-  <!-- Use buildtool_depend for build tool packages: -->
+-  <!--   <buildtool_depend>catkin</buildtool_depend> -->
+-  <!-- Use exec_depend for packages you need at runtime: -->
+-  <!--   <exec_depend>message_runtime</exec_depend> -->
+-  <!-- Use test_depend for packages you need only for testing: -->
+-  <!--   <test_depend>gtest</test_depend> -->
+-  <!-- Use doc_depend for packages you need only for building documentation: -->
+-  <!--   <doc_depend>doxygen</doc_depend> -->
+-  <buildtool_depend>catkin</buildtool_depend>
+-  <build_depend>roscpp</build_depend>
+-  <build_depend>rospy</build_depend>
+-  <build_depend>std_msgs</build_depend>
+-  <build_depend>plan_env</build_depend>
+-  <build_export_depend>roscpp</build_export_depend>
+-  <build_export_depend>rospy</build_export_depend>
+-  <build_export_depend>std_msgs</build_export_depend>
+-  <build_export_depend>plan_env</build_export_depend>
+-  <exec_depend>roscpp</exec_depend>
+-  <exec_depend>rospy</exec_depend>
+-  <exec_depend>std_msgs</exec_depend>
+-  <exec_depend>plan_env</exec_depend>
+-
+-
+-  <!-- The export tag contains other, unspecified, tags -->
+-  <export>
+-    <!-- Other tools can request additional information be placed here -->
+-
+-  </export>
+-</package>
++<package format="3"><name>path_searching</name><version>0.1.0</version><description>ROS 2 port of pinned EGO-v2 path_searching</description><maintainer email="ake@example.com">ake</maintainer><license>GPL-3.0</license><buildtool_depend>ament_cmake</buildtool_depend><depend>rclcpp</depend><depend>std_msgs</depend><depend>sensor_msgs</depend><depend>geometry_msgs</depend><depend>nav_msgs</depend><depend>visualization_msgs</depend><depend>cv_bridge</depend><depend>pcl_conversions</depend><depend>ego_ros2</depend><depend>plan_env</depend><export><build_type>ament_cmake</build_type></export></package>
+--- a/swarm-playground/main_ws/src/planner/path_searching/src/dyn_a_star.cpp
++++ b/swarm-playground/main_ws/src/planner/path_searching/src/dyn_a_star.cpp
+@@ -141,7 +141,7 @@
+ 
+ ASTAR_RET AStar::AstarSearch(const double step_size, Vector3d start_pt, Vector3d end_pt)
+ {
+-    ros::Time time_1 = ros::Time::now();
++    ego_ros2::Time time_1 = ego_ros2::Time::now();
+     ++rounds_;
+ 
+     step_size_ = step_size;
+@@ -191,7 +191,7 @@
+ 
+         if (current->index(0) == endPtr->index(0) && current->index(1) == endPtr->index(1) && current->index(2) == endPtr->index(2))
+         {
+-            // ros::Time time_2 = ros::Time::now();
++            // ego_ros2::Time time_2 = ego_ros2::Time::now();
+             // printf("\033[34mA star iter:%d, time:%.3f\033[0m\n",num_iter, (time_2 - time_1).toSec()*1000);
+             // if((time_2 - time_1).toSec() > 0.1)
+             //     ROS_WARN("Time consume in A star path finding is %f", (time_2 - time_1).toSec() );
+@@ -253,7 +253,7 @@
+                         neighborPtr->fScore = tentative_gScore + getHeu(neighborPtr, endPtr);
+                     }
+                 }
+-        ros::Time time_2 = ros::Time::now();
++        ego_ros2::Time time_2 = ego_ros2::Time::now();
+         if ((time_2 - time_1).toSec() > 0.2)
+         {
+             ROS_WARN("Failed in A star path searching !!! 0.2 seconds time limit exceeded.");
+@@ -261,7 +261,7 @@
+         }
+     }
+ 
+-    ros::Time time_2 = ros::Time::now();
++    ego_ros2::Time time_2 = ego_ros2::Time::now();
+ 
+     if ((time_2 - time_1).toSec() > 0.1)
+         ROS_WARN("Time consume in A star path finding is %.3fs, iter=%d", (time_2 - time_1).toSec(), num_iter);
+--- a/swarm-playground/main_ws/src/planner/plan_env/CMakeLists.txt
++++ b/swarm-playground/main_ws/src/planner/plan_env/CMakeLists.txt
+@@ -1,50 +1,26 @@
+-cmake_minimum_required(VERSION 2.8.3)
++cmake_minimum_required(VERSION 3.16)
+ project(plan_env)
+-
+-set(CMAKE_BUILD_TYPE "Release")
+-ADD_COMPILE_OPTIONS(-std=c++11 )
+-ADD_COMPILE_OPTIONS(-std=c++14 )
+-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
+-
++set(CMAKE_CXX_STANDARD 17)
++find_package(ament_cmake REQUIRED)
++find_package(Eigen3 REQUIRED)
++find_package(PCL REQUIRED COMPONENTS common)
+ find_package(OpenCV REQUIRED)
+-
+-
+-find_package(catkin REQUIRED COMPONENTS
+-  roscpp
+-  rospy
+-  std_msgs
+-  visualization_msgs
+-  cv_bridge
+-  message_filters
+-)
+-
+-find_package(Eigen3 REQUIRED)
+-find_package(PCL 1.7 REQUIRED)
+-
+-catkin_package(
+- INCLUDE_DIRS include
+- LIBRARIES plan_env
+- CATKIN_DEPENDS roscpp std_msgs
+-#  DEPENDS system_lib
+-)
+-
+-include_directories( 
+-    SYSTEM 
+-    include 
+-    ${catkin_INCLUDE_DIRS}
+-    ${Eigen3_INCLUDE_DIRS} 
+-    ${PCL_INCLUDE_DIRS}
+-    ${OpenCV_INCLUDE_DIRS}
+-)
+-
+-link_directories(${PCL_LIBRARY_DIRS})
+-
+-add_library( plan_env 
+-    src/grid_map.cpp 
+-    src/raycast.cpp
+-    )
+-
+-target_link_libraries( plan_env
+-    ${catkin_LIBRARIES} 
+-    ${PCL_LIBRARIES}
+-    )  
++find_package(rclcpp REQUIRED)
++find_package(std_msgs REQUIRED)
++find_package(sensor_msgs REQUIRED)
++find_package(geometry_msgs REQUIRED)
++find_package(nav_msgs REQUIRED)
++find_package(visualization_msgs REQUIRED)
++find_package(cv_bridge REQUIRED)
++find_package(pcl_conversions REQUIRED)
++find_package(ego_ros2 REQUIRED)
++add_library(plan_env_lib SHARED src/grid_map.cpp src/raycast.cpp)
++target_include_directories(plan_env_lib PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include> ${PCL_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
++target_link_libraries(plan_env_lib Eigen3::Eigen ${PCL_LIBRARIES} ${OpenCV_LIBRARIES})
++ament_target_dependencies(plan_env_lib rclcpp std_msgs sensor_msgs geometry_msgs nav_msgs visualization_msgs cv_bridge pcl_conversions ego_ros2)
++install(TARGETS plan_env_lib DESTINATION lib)
++install(DIRECTORY include/ DESTINATION include)
++ament_export_libraries(plan_env_lib)
++ament_export_include_directories(include)
++ament_export_dependencies(rclcpp std_msgs sensor_msgs geometry_msgs nav_msgs visualization_msgs cv_bridge pcl_conversions ego_ros2)
++ament_package()
+--- a/swarm-playground/main_ws/src/planner/plan_env/include/plan_env/grid_map.h
++++ b/swarm-playground/main_ws/src/planner/plan_env/include/plan_env/grid_map.h
+@@ -4,23 +4,22 @@
+ #include <Eigen/Eigen>
+ #include <Eigen/StdVector>
+ #include <cv_bridge/cv_bridge.h>
+-#include <geometry_msgs/PoseStamped.h>
++#include <geometry_msgs/msg/pose_stamped.hpp>
+ #include <iostream>
+ #include <random>
+-#include <nav_msgs/Odometry.h>
++#include <nav_msgs/msg/odometry.hpp>
+ #include <queue>
+-#include <ros/ros.h>
++#include <ego_ros2/runtime.hpp>
+ #include <tuple>
+-#include <visualization_msgs/Marker.h>
+-
++#include <visualization_msgs/msg/marker.hpp>
++
++#include <sensor_msgs/msg/point_cloud2.hpp>
++#include <sensor_msgs/msg/image.hpp>
++#include <sensor_msgs/image_encodings.hpp>
+ #include <pcl/point_cloud.h>
+ #include <pcl/point_types.h>
+ #include <pcl_conversions/pcl_conversions.h>
+ 
+-#include <message_filters/subscriber.h>
+-#include <message_filters/sync_policies/approximate_time.h>
+-#include <message_filters/sync_policies/exact_time.h>
+-#include <message_filters/time_synchronizer.h>
+ 
+ #include <plan_env/raycast.h>
+ 
+@@ -114,7 +113,7 @@
+   bool has_odom_;
+ 
+   // odom_depth_timeout_
+-  ros::Time last_occ_update_time_;
++  ego_ros2::Time last_occ_update_time_;
+   bool flag_depth_odom_timeout_;
+   bool flag_have_ever_received_depth_;
+ 
+@@ -141,10 +140,17 @@
+   GridMap() {}
+   ~GridMap() {}
+ 
+-  void initMap(ros::NodeHandle &nh);
++  void initMap(ego_ros2::NodeHandle &nh);
+   inline int getOccupancy(Eigen::Vector3d pos);
+   inline int getInflateOccupancy(Eigen::Vector3d pos);
+   inline double getResolution();
++  std::pair<size_t,size_t> mapBufferCapacity() const {
++    return {md_.occupancy_buffer_.size(), md_.occupancy_buffer_inflate_.size()};
++  }
++  bool inLocalWindow(const Eigen::Vector3d &p, double margin) const {
++    return (p.array()>=md_.ringbuffer_lowbound3d_.array()+margin).all() &&
++           (p.array()<=md_.ringbuffer_upbound3d_.array()-margin).all();
++  }
+   bool getOdomDepthTimeout() { return md_.flag_depth_odom_timeout_; }
+ 
+   typedef std::shared_ptr<GridMap> Ptr;
+@@ -177,17 +183,17 @@
+   void publishMapInflate();
+ 
+   // get depth image and camera pose
+-  void depthPoseCallback(const sensor_msgs::ImageConstPtr &img,
+-                         const geometry_msgs::PoseStampedConstPtr &pose);
+-  void extrinsicCallback(const nav_msgs::OdometryConstPtr &odom);
+-  void depthOdomCallback(const sensor_msgs::ImageConstPtr &img, const nav_msgs::OdometryConstPtr &odom);
+-  void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &img);
+-  void odomCallback(const nav_msgs::OdometryConstPtr &odom);
++  void depthPoseCallback(const sensor_msgs::msg::Image::ConstSharedPtr &img,
++                         const geometry_msgs::msg::PoseStamped::ConstSharedPtr &pose);
++  void extrinsicCallback(const nav_msgs::msg::Odometry::ConstSharedPtr &odom);
++  void depthOdomCallback(const sensor_msgs::msg::Image::ConstSharedPtr &img, const nav_msgs::msg::Odometry::ConstSharedPtr &odom);
++  void cloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &img);
++  void odomCallback(const nav_msgs::msg::Odometry::ConstSharedPtr &odom);
+ 
+   // update occupancy by raycasting
+-  void updateOccupancyCallback(const ros::TimerEvent & /*event*/);
+-  void visCallback(const ros::TimerEvent & /*event*/);
+-  void fadingCallback(const ros::TimerEvent & /*event*/);
++  void updateOccupancyCallback(const ego_ros2::TimerEvent & /*event*/);
++  void visCallback(const ego_ros2::TimerEvent & /*event*/);
++  void fadingCallback(const ego_ros2::TimerEvent & /*event*/);
+ 
+   void clearBuffer(char casein, int bound);
+ 
+@@ -204,27 +210,10 @@
+   bool checkDepthOdomNeedupdate();
+   void initMapBoundary();
+ 
+-  // typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image,
+-  // nav_msgs::Odometry> SyncPolicyImageOdom; typedef
+-  // message_filters::sync_policies::ExactTime<sensor_msgs::Image,
+-  // geometry_msgs::PoseStamped> SyncPolicyImagePose;
+-  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, nav_msgs::Odometry>
+-      SyncPolicyImageOdom;
+-  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, geometry_msgs::PoseStamped>
+-      SyncPolicyImagePose;
+-  typedef shared_ptr<message_filters::Synchronizer<SyncPolicyImagePose>> SynchronizerImagePose;
+-  typedef shared_ptr<message_filters::Synchronizer<SyncPolicyImageOdom>> SynchronizerImageOdom;
+-
+-  ros::NodeHandle node_;
+-  shared_ptr<message_filters::Subscriber<sensor_msgs::Image>> depth_sub_;
+-  shared_ptr<message_filters::Subscriber<geometry_msgs::PoseStamped>> pose_sub_;
+-  shared_ptr<message_filters::Subscriber<nav_msgs::Odometry>> odom_sub_;
+-  SynchronizerImagePose sync_image_pose_;
+-  SynchronizerImageOdom sync_image_odom_;
+-
+-  ros::Subscriber indep_cloud_sub_, indep_odom_sub_, extrinsic_sub_;
+-  ros::Publisher map_pub_, map_inf_pub_;
+-  ros::Timer occ_timer_, vis_timer_, fading_timer_;
++  ego_ros2::NodeHandle node_;
++  ego_ros2::Subscriber indep_cloud_sub_, indep_odom_sub_, extrinsic_sub_;
++  ego_ros2::Publisher map_pub_, map_inf_pub_;
++  ego_ros2::Timer occ_timer_, vis_timer_, fading_timer_;
+ 
+   //
+   uniform_real_distribution<double> rand_noise_;
+@@ -268,6 +257,12 @@
+     for (int y_inf = -inf_grid; y_inf <= inf_grid; ++y_inf)
+       for (int z_inf = -inf_grid; z_inf <= inf_grid; ++z_inf)
+       {
++        // Include the occupied voxel extent and the queried voxel extent so
++        // every continuous point in a native-free voxel meets the independent
++        // spherical clearance. Insertion and removal use the same kernel.
++        const double radius = mp_.obstacles_inflation_ + 1.732050807568 * mp_.resolution_;
++        if ((x_inf*x_inf+y_inf*y_inf+z_inf*z_inf)*mp_.resolution_*mp_.resolution_ > radius*radius)
++          continue;
+         Eigen::Vector3i id_inf(global_idx + Eigen::Vector3i(x_inf, y_inf, z_inf));
+ #if GRID_MAP_NEW_PLATFORM_TEST
+         if (isInInfBuf(id_inf))
+--- a/swarm-playground/main_ws/src/planner/plan_env/package.xml
++++ b/swarm-playground/main_ws/src/planner/plan_env/package.xml
+@@ -1,68 +1 @@
+-<?xml version="1.0"?>
+-<package format="2">
+-  <name>plan_env</name>
+-  <version>0.0.0</version>
+-  <description>The plan_env package</description>
+-
+-  <!-- One maintainer tag required, multiple allowed, one person per tag -->
+-  <!-- Example:  -->
+-  <!-- <maintainer email="jane.doe@example.com">Jane Doe</maintainer> -->
+-  <maintainer email="iszhouxin@zju.edu.cn">iszhouxin</maintainer>
+-
+-
+-  <!-- One license tag required, multiple allowed, one license per tag -->
+-  <!-- Commonly used license strings: -->
+-  <!--   BSD, MIT, Boost Software License, GPLv2, GPLv3, LGPLv2.1, LGPLv3 -->
+-  <license>TODO</license>
+-
+-
+-  <!-- Url tags are optional, but multiple are allowed, one per tag -->
+-  <!-- Optional attribute type can be: website, bugtracker, or repository -->
+-  <!-- Example: -->
+-  <!-- <url type="website">http://wiki.ros.org/plan_env</url> -->
+-
+-
+-  <!-- Author tags are optional, multiple are allowed, one per tag -->
+-  <!-- Authors do not have to be maintainers, but could be -->
+-  <!-- Example: -->
+-  <!-- <author email="jane.doe@example.com">Jane Doe</author> -->
+-
+-
+-  <!-- The *depend tags are used to specify dependencies -->
+-  <!-- Dependencies can be catkin packages or system dependencies -->
+-  <!-- Examples: -->
+-  <!-- Use depend as a shortcut for packages that are both build and exec dependencies -->
+-  <!--   <depend>roscpp</depend> -->
+-  <!--   Note that this is equivalent to the following: -->
+-  <!--   <build_depend>roscpp</build_depend> -->
+-  <!--   <exec_depend>roscpp</exec_depend> -->
+-  <!-- Use build_depend for packages you need at compile time: -->
+-  <!--   <build_depend>message_generation</build_depend> -->
+-  <!-- Use build_export_depend for packages you need in order to build against this package: -->
+-  <!--   <build_export_depend>message_generation</build_export_depend> -->
+-  <!-- Use buildtool_depend for build tool packages: -->
+-  <!--   <buildtool_depend>catkin</buildtool_depend> -->
+-  <!-- Use exec_depend for packages you need at runtime: -->
+-  <!--   <exec_depend>message_runtime</exec_depend> -->
+-  <!-- Use test_depend for packages you need only for testing: -->
+-  <!--   <test_depend>gtest</test_depend> -->
+-  <!-- Use doc_depend for packages you need only for building documentation: -->
+-  <!--   <doc_depend>doxygen</doc_depend> -->
+-  <buildtool_depend>catkin</buildtool_depend>
+-  <build_depend>roscpp</build_depend>
+-  <build_depend>rospy</build_depend>
+-  <build_depend>std_msgs</build_depend>
+-  <build_export_depend>roscpp</build_export_depend>
+-  <build_export_depend>rospy</build_export_depend>
+-  <build_export_depend>std_msgs</build_export_depend>
+-  <exec_depend>roscpp</exec_depend>
+-  <exec_depend>rospy</exec_depend>
+-  <exec_depend>std_msgs</exec_depend>
+-
+-
+-  <!-- The export tag contains other, unspecified, tags -->
+-  <export>
+-    <!-- Other tools can request additional information be placed here -->
+-
+-  </export>
+-</package>
++<package format="3"><name>plan_env</name><version>0.1.0</version><description>ROS 2 port of pinned EGO-v2 plan_env</description><maintainer email="ake@example.com">ake</maintainer><license>GPL-3.0</license><buildtool_depend>ament_cmake</buildtool_depend><depend>rclcpp</depend><depend>std_msgs</depend><depend>sensor_msgs</depend><depend>geometry_msgs</depend><depend>nav_msgs</depend><depend>visualization_msgs</depend><depend>cv_bridge</depend><depend>pcl_conversions</depend><depend>ego_ros2</depend><export><build_type>ament_cmake</build_type></export></package>
+--- a/swarm-playground/main_ws/src/planner/plan_env/src/grid_map.cpp
++++ b/swarm-playground/main_ws/src/planner/plan_env/src/grid_map.cpp
+@@ -1,6 +1,6 @@
+ #include "plan_env/grid_map.h"
+ 
+-void GridMap::initMap(ros::NodeHandle &nh)
++void GridMap::initMap(ego_ros2::NodeHandle &nh)
+ {
+   node_ = nh;
+ 
+@@ -41,13 +41,13 @@
+ 
+   node_.param("grid_map/show_occ_time", mp_.show_occ_time_, false);
+ 
+-  mp_.inf_grid_ = ceil((mp_.obstacles_inflation_ - 1e-5) / mp_.resolution_);
+-  if (mp_.inf_grid_ > 4)
+-  {
+-    mp_.inf_grid_ = 4;
+-    mp_.resolution_ = mp_.obstacles_inflation_ / mp_.inf_grid_;
+-    ROS_WARN("Inflation is too big, which will cause siginificant computation! Resolution enalrged to %f automatically.", mp_.resolution_);
+-  }
++  // Keep the requested metric map resolution and rolling-window dimensions.
++  // The kernel covers both the occupied voxel's extent and the query voxel's
++  // extent: checking only its centre can admit a point the stopping guard
++  // rejects near a cell corner. Size the existing halo for the whole kernel;
++  // the upstream four-cell cap both cropped it and silently coarsened maps.
++  mp_.inf_grid_ = ceil((mp_.obstacles_inflation_ +
++                       1.732050807568 * mp_.resolution_) / mp_.resolution_);
+ 
+   mp_.resolution_inv_ = 1 / mp_.resolution_;
+   mp_.local_update_range3i_ = (mp_.local_update_range3d_ * mp_.resolution_inv_).array().ceil().cast<int>();
+@@ -87,47 +87,22 @@
+   md_.proj_points_cnt_ = 0;
+   md_.cache_voxel_cnt_ = 0;
+ 
+-  md_.cam2body_ << 0.0, 0.0, 1.0, 0.0,
+-      -1.0, 0.0, 0.0, 0.0,
+-      0.0, -1.0, 0.0, 0.0,
+-      0.0, 0.0, 0.0, 1.0;
++  md_.cam2body_.setIdentity(); // Sensor/world transforms are applied by the generic input adapter.
+ 
+   /* init callback */
+-  depth_sub_.reset(new message_filters::Subscriber<sensor_msgs::Image>(node_, "grid_map/depth", 50));
+-  extrinsic_sub_ = node_.subscribe<nav_msgs::Odometry>(
+-      "/vins_estimator/extrinsic", 10, &GridMap::extrinsicCallback, this); //sub
+-
+-  if (mp_.pose_type_ == POSE_STAMPED)
+-  {
+-    pose_sub_.reset(
+-        new message_filters::Subscriber<geometry_msgs::PoseStamped>(node_, "grid_map/pose", 25));
+-
+-    sync_image_pose_.reset(new message_filters::Synchronizer<SyncPolicyImagePose>(
+-        SyncPolicyImagePose(100), *depth_sub_, *pose_sub_));
+-    sync_image_pose_->registerCallback(boost::bind(&GridMap::depthPoseCallback, this, _1, _2));
+-  }
+-  else if (mp_.pose_type_ == ODOMETRY)
+-  {
+-    odom_sub_.reset(new message_filters::Subscriber<nav_msgs::Odometry>(node_, "grid_map/odom", 100, ros::TransportHints().tcpNoDelay()));
+-
+-    sync_image_odom_.reset(new message_filters::Synchronizer<SyncPolicyImageOdom>(
+-        SyncPolicyImageOdom(100), *depth_sub_, *odom_sub_));
+-    sync_image_odom_->registerCallback(boost::bind(&GridMap::depthOdomCallback, this, _1, _2));
+-  }
+-
+   // use odometry and point cloud
+   indep_odom_sub_ =
+-      node_.subscribe<nav_msgs::Odometry>("grid_map/odom", 10, &GridMap::odomCallback, this);
++      node_.subscribe<nav_msgs::msg::Odometry>("grid_map/odom", 10, &GridMap::odomCallback, this);
+   indep_cloud_sub_ =
+-      node_.subscribe<sensor_msgs::PointCloud2>("grid_map/cloud", 10, &GridMap::cloudCallback, this);
+-
+-  occ_timer_ = node_.createTimer(ros::Duration(0.032), &GridMap::updateOccupancyCallback, this);
+-  vis_timer_ = node_.createTimer(ros::Duration(0.125), &GridMap::visCallback, this);
++      node_.subscribe<sensor_msgs::msg::PointCloud2>("grid_map/cloud", 10, &GridMap::cloudCallback, this);
++
++  occ_timer_ = node_.createTimer(ego_ros2::Duration(0.032), &GridMap::updateOccupancyCallback, this);
++  vis_timer_ = node_.createTimer(ego_ros2::Duration(0.125), &GridMap::visCallback, this);
+   if (mp_.fading_time_ > 0)
+-    fading_timer_ = node_.createTimer(ros::Duration(0.5), &GridMap::fadingCallback, this);
+-
+-  map_pub_ = node_.advertise<sensor_msgs::PointCloud2>("grid_map/occupancy", 10);
+-  map_inf_pub_ = node_.advertise<sensor_msgs::PointCloud2>("grid_map/occupancy_inflate", 10);
++    fading_timer_ = node_.createTimer(ego_ros2::Duration(0.5), &GridMap::fadingCallback, this);
++
++  map_pub_ = node_.advertise<sensor_msgs::msg::PointCloud2>("grid_map/occupancy", 10);
++  map_inf_pub_ = node_.advertise<sensor_msgs::msg::PointCloud2>("grid_map/occupancy_inflate", 10);
+ 
+   md_.occ_need_update_ = false;
+   md_.has_first_depth_ = false;
+@@ -138,28 +113,28 @@
+   md_.flag_depth_odom_timeout_ = false;
+ }
+ 
+-void GridMap::updateOccupancyCallback(const ros::TimerEvent & /*event*/)
++void GridMap::updateOccupancyCallback(const ego_ros2::TimerEvent & /*event*/)
+ {
+   if (!checkDepthOdomNeedupdate())
+     return;
+ 
+   /* update occupancy */
+-  ros::Time t1, t2, t3, t4, t5;
+-  t1 = ros::Time::now();
++  ego_ros2::Time t1, t2, t3, t4, t5;
++  t1 = ego_ros2::Time::now();
+ 
+   moveRingBuffer();
+-  t2 = ros::Time::now();
++  t2 = ego_ros2::Time::now();
+ 
+   projectDepthImage();
+-  t3 = ros::Time::now();
++  t3 = ego_ros2::Time::now();
+ 
+   if (md_.proj_points_cnt_ > 0)
+   {
+     raycastProcess();
+-    t4 = ros::Time::now();
++    t4 = ego_ros2::Time::now();
+ 
+     clearAndInflateLocalMap();
+-    t5 = ros::Time::now();
++    t5 = ego_ros2::Time::now();
+ 
+     if (mp_.show_occ_time_)
+     {
+@@ -185,15 +160,15 @@
+   md_.occ_need_update_ = false;
+ }
+ 
+-void GridMap::visCallback(const ros::TimerEvent & /*event*/)
++void GridMap::visCallback(const ego_ros2::TimerEvent & /*event*/)
+ {
+   if (!mp_.have_initialized_)
+     return;
+ 
+-  ros::Time t0 = ros::Time::now();
++  ego_ros2::Time t0 = ego_ros2::Time::now();
+   publishMapInflate();
+   publishMap();
+-  ros::Time t1 = ros::Time::now();
++  ego_ros2::Time t1 = ego_ros2::Time::now();
+ 
+   if (mp_.show_occ_time_)
+   {
+@@ -201,12 +176,12 @@
+   }
+ }
+ 
+-void GridMap::fadingCallback(const ros::TimerEvent & /*event*/)
++void GridMap::fadingCallback(const ego_ros2::TimerEvent & /*event*/)
+ {
+   const double reduce = (mp_.clamp_max_log_ - mp_.min_occupancy_log_) / (mp_.fading_time_ * 2); // function called at 2Hz
+   const double low_thres = mp_.clamp_min_log_ + reduce;
+ 
+-  ros::Time t0 = ros::Time::now();
++  ego_ros2::Time t0 = ego_ros2::Time::now();
+   for (size_t i = 0; i < md_.occupancy_buffer_.size(); ++i)
+   {
+     if (md_.occupancy_buffer_[i] > low_thres)
+@@ -221,7 +196,7 @@
+       }
+     }
+   }
+-  ros::Time t1 = ros::Time::now();
++  ego_ros2::Time t1 = ego_ros2::Time::now();
+ 
+   if (mp_.show_occ_time_)
+   {
+@@ -229,8 +204,8 @@
+   }
+ }
+ 
+-void GridMap::depthPoseCallback(const sensor_msgs::ImageConstPtr &img,
+-                                const geometry_msgs::PoseStampedConstPtr &pose)
++void GridMap::depthPoseCallback(const sensor_msgs::msg::Image::ConstSharedPtr &img,
++                                const geometry_msgs::msg::PoseStamped::ConstSharedPtr &pose)
+ {
+   /* get depth image */
+   cv_bridge::CvImagePtr cv_ptr;
+@@ -263,8 +238,8 @@
+   md_.flag_have_ever_received_depth_ = true;
+ }
+ 
+-void GridMap::depthOdomCallback(const sensor_msgs::ImageConstPtr &img,
+-                                const nav_msgs::OdometryConstPtr &odom)
++void GridMap::depthOdomCallback(const sensor_msgs::msg::Image::ConstSharedPtr &img,
++                                const nav_msgs::msg::Odometry::ConstSharedPtr &odom)
+ {
+ 
+   /* get pose */
+@@ -306,11 +281,11 @@
+   md_.flag_have_ever_received_depth_ = true;
+ }
+ 
+-void GridMap::odomCallback(const nav_msgs::OdometryConstPtr &odom)
++void GridMap::odomCallback(const nav_msgs::msg::Odometry::ConstSharedPtr &odom)
+ {
+   if (md_.flag_have_ever_received_depth_)
+   {
+-    indep_odom_sub_.shutdown();
++    indep_odom_sub_.reset();
+     return;
+   }
+ 
+@@ -336,7 +311,7 @@
+   md_.has_odom_ = true;
+ }
+ 
+-void GridMap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr &img)
++void GridMap::cloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &img)
+ {
+   /* Note: no obstalce elimination in this function! */
+ 
+@@ -382,7 +357,7 @@
+   }
+ }
+ 
+-void GridMap::extrinsicCallback(const nav_msgs::OdometryConstPtr &odom)
++void GridMap::extrinsicCallback(const nav_msgs::msg::Odometry::ConstSharedPtr &odom)
+ {
+   Eigen::Quaterniond cam2body_q = Eigen::Quaterniond(odom->pose.pose.orientation.w,
+                                                      odom->pose.pose.orientation.x,
+@@ -578,7 +553,7 @@
+ {
+   md_.cache_voxel_cnt_ = 0;
+ 
+-  ros::Time t1, t2, t3;
++  ego_ros2::Time t1, t2, t3;
+ 
+   md_.raycast_num_ += 1;
+ 
+@@ -586,7 +561,7 @@
+   Eigen::Vector3d ray_pt, pt_w;
+ 
+   int pts_num = 0;
+-  t1 = ros::Time::now();
++  t1 = ego_ros2::Time::now();
+   for (int i = 0; i < md_.proj_points_cnt_; ++i)
+   {
+     int vox_idx;
+@@ -643,7 +618,7 @@
+     }
+   }
+ 
+-  t2 = ros::Time::now();
++  t2 = ego_ros2::Time::now();
+ 
+   for (int i = 0; i < md_.cache_voxel_cnt_; ++i)
+   {
+@@ -669,7 +644,7 @@
+                  mp_.clamp_max_log_);
+   }
+ 
+-  t3 = ros::Time::now();
++  t3 = ego_ros2::Time::now();
+ 
+   if (mp_.show_occ_time_)
+   {
+@@ -818,19 +793,19 @@
+ {
+   if (md_.last_occ_update_time_.toSec() < 1.0)
+   {
+-    md_.last_occ_update_time_ = ros::Time::now();
++    md_.last_occ_update_time_ = ego_ros2::Time::now();
+   }
+   if (!md_.occ_need_update_)
+   {
+-    if (md_.flag_have_ever_received_depth_ && (ros::Time::now() - md_.last_occ_update_time_).toSec() > mp_.odom_depth_timeout_)
+-    {
+-      ROS_ERROR("odom or depth lost! ros::Time::now()=%f, md_.last_occ_update_time_=%f, mp_.odom_depth_timeout_=%f",
+-                ros::Time::now().toSec(), md_.last_occ_update_time_.toSec(), mp_.odom_depth_timeout_);
++    if (md_.flag_have_ever_received_depth_ && (ego_ros2::Time::now() - md_.last_occ_update_time_).toSec() > mp_.odom_depth_timeout_)
++    {
++      ROS_ERROR("odom or depth lost! ego_ros2::Time::now()=%f, md_.last_occ_update_time_=%f, mp_.odom_depth_timeout_=%f",
++                ego_ros2::Time::now().toSec(), md_.last_occ_update_time_.toSec(), mp_.odom_depth_timeout_);
+       md_.flag_depth_odom_timeout_ = true;
+     }
+     return false;
+   }
+-  md_.last_occ_update_time_ = ros::Time::now();
++  md_.last_occ_update_time_ = ego_ros2::Time::now();
+ 
+   return true;
+ }
+@@ -862,7 +837,7 @@
+   cloud.height = 1;
+   cloud.is_dense = true;
+   cloud.header.frame_id = mp_.frame_id_;
+-  sensor_msgs::PointCloud2 cloud_msg;
++  sensor_msgs::msg::PointCloud2 cloud_msg;
+ 
+   pcl::toROSMsg(cloud, cloud_msg);
+   map_pub_.publish(cloud_msg);
+@@ -896,7 +871,7 @@
+   cloud.height = 1;
+   cloud.is_dense = true;
+   cloud.header.frame_id = mp_.frame_id_;
+-  sensor_msgs::PointCloud2 cloud_msg;
++  sensor_msgs::msg::PointCloud2 cloud_msg;
+ 
+   pcl::toROSMsg(cloud, cloud_msg);
+   map_inf_pub_.publish(cloud_msg);
+@@ -907,7 +882,7 @@
+   if (!mp_.have_initialized_)
+     return;
+ 
+-  ros::Time t0 = ros::Time::now();
++  ego_ros2::Time t0 = ego_ros2::Time::now();
+   double a = 0;
+   int b = 0;
+   for (int i = 0; i < 10; ++i)
+@@ -917,7 +892,7 @@
+         {
+           b += x + y + z;
+         }
+-  ros::Time t1 = ros::Time::now();
++  ego_ros2::Time t1 = ego_ros2::Time::now();
+ 
+   for (int i = 0; i < 10; ++i)
+     for (int x = md_.ringbuffer_lowbound3i_(0); x <= md_.ringbuffer_upbound3i_(0); ++x)
+@@ -928,7 +903,7 @@
+           b += id_buf_inf_clr;
+           b += x + y + z;
+         }
+-  ros::Time t2 = ros::Time::now();
++  ego_ros2::Time t2 = ego_ros2::Time::now();
+ 
+   for (int i = 0; i < 10; ++i)
+     for (int x = md_.ringbuffer_lowbound3i_(0); x <= md_.ringbuffer_upbound3i_(0); ++x)
+@@ -939,7 +914,7 @@
+           a += pos.sum();
+           b += x + y + z;
+         }
+-  ros::Time t3 = ros::Time::now();
++  ego_ros2::Time t3 = ego_ros2::Time::now();
+ 
+   for (int i = 0; i < 10; ++i)
+     for (double xd = md_.ringbuffer_lowbound3d_(0); xd <= md_.ringbuffer_upbound3d_(0); xd += mp_.resolution_)
+@@ -948,7 +923,7 @@
+         {
+           a += xd + yd + zd;
+         }
+-  ros::Time t4 = ros::Time::now();
++  ego_ros2::Time t4 = ego_ros2::Time::now();
+ 
+   for (int i = 0; i < 10; ++i)
+     for (double xd = md_.ringbuffer_lowbound3d_(0); xd <= md_.ringbuffer_upbound3d_(0); xd += mp_.resolution_)
+@@ -959,7 +934,7 @@
+           a += xd + yd + zd;
+           b += idx.sum();
+         }
+-  ros::Time t5 = ros::Time::now();
++  ego_ros2::Time t5 = ego_ros2::Time::now();
+ 
+   for (int i = 0; i < 10; ++i)
+     for (double xd = md_.ringbuffer_lowbound3d_(0); xd <= md_.ringbuffer_upbound3d_(0); xd += mp_.resolution_)
+@@ -970,14 +945,14 @@
+           a += xd + yd + zd;
+           b += id_buf_inf_clr;
+         }
+-  ros::Time t6 = ros::Time::now();
++  ego_ros2::Time t6 = ego_ros2::Time::now();
+ 
+   for (int i = 0; i < 10; ++i)
+     for (size_t i = 0; i < md_.occupancy_buffer_.size(); ++i)
+     {
+       b += i;
+     }
+-  ros::Time t7 = ros::Time::now();
++  ego_ros2::Time t7 = ego_ros2::Time::now();
+ 
+   for (int i = 0; i < 10; ++i)
+     for (size_t i = 0; i < md_.occupancy_buffer_.size(); ++i)
+@@ -986,7 +961,7 @@
+       b += i;
+       b += idx.sum();
+     }
+-  ros::Time t8 = ros::Time::now();
++  ego_ros2::Time t8 = ego_ros2::Time::now();
+ 
+   int n = md_.occupancy_buffer_.size() * 10;
+ 
+--- a/swarm-playground/main_ws/src/planner/plan_manage/CMakeLists.txt
++++ b/swarm-playground/main_ws/src/planner/plan_manage/CMakeLists.txt
+@@ -1,56 +1,31 @@
+-cmake_minimum_required(VERSION 2.8.3)
++cmake_minimum_required(VERSION 3.16)
+ project(ego_planner)
+-
+-set(CMAKE_BUILD_TYPE "Release")
+-ADD_COMPILE_OPTIONS(-std=c++11 )
+-ADD_COMPILE_OPTIONS(-std=c++14 )
+-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
+-
++set(CMAKE_CXX_STANDARD 17)
++find_package(ament_cmake REQUIRED)
+ find_package(Eigen3 REQUIRED)
+-find_package(PCL 1.7 REQUIRED)
+-
+-find_package(catkin REQUIRED COMPONENTS
+-  roscpp
+-  std_msgs
+-  geometry_msgs
+-  quadrotor_msgs
+-  plan_env
+-  path_searching
+-  traj_opt
+-  traj_utils
+-  message_generation
+-  cv_bridge
+-)
+-
+-# catkin_package(CATKIN_DEPENDS message_runtime)
+-catkin_package(
+- INCLUDE_DIRS include
+- LIBRARIES ego_planner
+- CATKIN_DEPENDS plan_env path_searching traj_opt traj_utils 
+-#  DEPENDS system_lib
+-)
+-
+-include_directories(
+-  include
+-  SYSTEM
+-  ${catkin_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/include
+-  ${EIGEN3_INCLUDE_DIR}
+-  ${PCL_INCLUDE_DIRS}
+-)
+-
+-
+-add_executable(ego_planner_node
+-  src/ego_planner_node.cpp 
+-  src/ego_replan_fsm.cpp
+-  src/planner_manager.cpp
+-  )
+-target_link_libraries(ego_planner_node 
+-  ${catkin_LIBRARIES}
+-  )
+-#add_dependencies(ego_planner_node ${${PROJECT_NAME}_EXPORTED_TARGETS})
+-
+-add_executable(traj_server src/traj_server.cpp)
+-target_link_libraries(traj_server ${catkin_LIBRARIES})
+-# add_dependencies(traj_server ${${PROJECT_NAME}_EXPORTED_TARGETS})
+-
+-
++find_package(PCL REQUIRED COMPONENTS common)
++find_package(OpenCV REQUIRED)
++find_package(rclcpp REQUIRED)
++find_package(std_msgs REQUIRED)
++find_package(sensor_msgs REQUIRED)
++find_package(geometry_msgs REQUIRED)
++find_package(nav_msgs REQUIRED)
++find_package(visualization_msgs REQUIRED)
++find_package(cv_bridge REQUIRED)
++find_package(pcl_conversions REQUIRED)
++find_package(ego_ros2 REQUIRED)
++find_package(quadrotor_msgs REQUIRED)
++find_package(plan_env REQUIRED)
++find_package(path_searching REQUIRED)
++find_package(traj_opt REQUIRED)
++find_package(traj_utils REQUIRED)
++add_executable(ego_planner_node src/ego_planner_node.cpp src/ego_replan_fsm.cpp src/planner_manager.cpp)
++target_include_directories(ego_planner_node PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include> ${PCL_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
++target_link_libraries(ego_planner_node Eigen3::Eigen ${PCL_LIBRARIES} ${OpenCV_LIBRARIES})
++ament_target_dependencies(ego_planner_node rclcpp std_msgs sensor_msgs geometry_msgs nav_msgs visualization_msgs cv_bridge pcl_conversions ego_ros2 quadrotor_msgs plan_env path_searching traj_opt traj_utils)
++find_library(TRAJ_UTILS_CORE traj_utils_lib PATHS ${traj_utils_LIBRARY_DIRS} REQUIRED)
++target_link_libraries(ego_planner_node ${TRAJ_UTILS_CORE})
++install(TARGETS ego_planner_node DESTINATION lib/${PROJECT_NAME})
++install(DIRECTORY include/ DESTINATION include)
++ament_export_dependencies(rclcpp std_msgs sensor_msgs geometry_msgs nav_msgs visualization_msgs cv_bridge pcl_conversions ego_ros2 quadrotor_msgs plan_env path_searching traj_opt traj_utils)
++ament_package()
+--- a/swarm-playground/main_ws/src/planner/plan_manage/include/plan_manage/ego_replan_fsm.h
++++ b/swarm-playground/main_ws/src/planner/plan_manage/include/plan_manage/ego_replan_fsm.h
+@@ -2,25 +2,30 @@
+ #define _REBO_REPLAN_FSM_H_
+ 
+ #include <Eigen/Eigen>
++#include <chrono>
++#include <std_msgs/msg/float64_multi_array.hpp>
++#include <std_msgs/msg/u_int64.hpp>
++#include <std_msgs/msg/bool.hpp>
++#include <std_msgs/msg/float64.hpp>
+ #include <algorithm>
+ #include <iostream>
+-#include <nav_msgs/Path.h>
+-#include <sensor_msgs/Imu.h>
+-#include <ros/ros.h>
+-#include <std_msgs/Empty.h>
+-#include <std_msgs/Float64.h>
++#include <nav_msgs/msg/path.hpp>
++#include <sensor_msgs/msg/imu.hpp>
++#include <ego_ros2/runtime.hpp>
++#include <std_msgs/msg/empty.hpp>
++#include <std_msgs/msg/float64.hpp>
+ #include <vector>
+-#include <visualization_msgs/Marker.h>
++#include <visualization_msgs/msg/marker.hpp>
+ 
+ #include <optimizer/poly_traj_optimizer.h>
+ #include <plan_env/grid_map.h>
+-#include <geometry_msgs/PoseStamped.h>
+-#include <quadrotor_msgs/GoalSet.h>
+-#include <traj_utils/DataDisp.h>
++#include <geometry_msgs/msg/pose_stamped.hpp>
++#include <quadrotor_msgs/msg/goal_set.hpp>
++#include <traj_utils/msg/data_disp.hpp>
+ #include <plan_manage/planner_manager.h>
+ #include <traj_utils/planning_visualization.h>
+-#include <traj_utils/PolyTraj.h>
+-#include <traj_utils/MINCOTraj.h>
++#include <traj_utils/msg/poly_traj.hpp>
++#include <traj_utils/msg/minco_traj.hpp>
+ 
+ using std::vector;
+ 
+@@ -33,7 +38,7 @@
+     EGOReplanFSM() {}
+     ~EGOReplanFSM() {}
+ 
+-    void init(ros::NodeHandle &nh);
++    void init(ego_ros2::NodeHandle &nh);
+ 
+     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+ 
+@@ -56,10 +61,16 @@
+       REFENCE_PATH = 3
+     };
+ 
++    ego_ros2::Publisher planning_metrics_pub_;
++
++    bool awaiting_acceptance_ = false;
++    uint64_t awaiting_native_id_ = 0;
++    rclcpp::Subscription<std_msgs::msg::UInt64>::SharedPtr acceptance_sub_;
++
+     /* planning utils */
+     EGOPlannerManager::Ptr planner_manager_;
+     PlanningVisualization::Ptr visualization_;
+-    traj_utils::DataDisp data_disp_;
++    traj_utils::msg::DataDisp data_disp_;
+ 
+     /* parameters */
+     int target_type_; // 1 mannual select, 2 hard code
+@@ -83,20 +94,24 @@
+     Eigen::Vector3d odom_pos_, odom_vel_, odom_acc_;     // odometry state
+     std::vector<Eigen::Vector3d> wps_;
+ 
++    bool execution_allowed_ = false;
++    double last_execution_time_ = -1;
++    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr permission_sub_;
++    rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr velocity_limit_sub_;
+     /* ROS utils */
+-    ros::NodeHandle node_;
+-    ros::Timer exec_timer_, safety_timer_;
+-    ros::Subscriber waypoint_sub_, odom_sub_, trigger_sub_, broadcast_ploytraj_sub_, mandatory_stop_sub_;
+-    ros::Publisher poly_traj_pub_, data_disp_pub_, broadcast_ploytraj_pub_, heartbeat_pub_, ground_height_pub_;
++    ego_ros2::NodeHandle node_;
++    ego_ros2::Timer exec_timer_, safety_timer_;
++    ego_ros2::Subscriber waypoint_sub_, odom_sub_, trigger_sub_, broadcast_ploytraj_sub_, mandatory_stop_sub_;
++    ego_ros2::Publisher poly_traj_pub_, data_disp_pub_, broadcast_ploytraj_pub_, heartbeat_pub_, ground_height_pub_;
+ 
+     /* state machine functions */
+-    void execFSMCallback(const ros::TimerEvent &e);
++    void execFSMCallback(const ego_ros2::TimerEvent &e);
+     void changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call);
+     void printFSMExecState();
+     std::pair<int, EGOReplanFSM::FSM_EXEC_STATE> timesOfConsecutiveStateCalls();
+ 
+     /* safety */
+-    void checkCollisionCallback(const ros::TimerEvent &e);
++    void checkCollisionCallback(const ego_ros2::TimerEvent &e);
+     bool callEmergencyStop(Eigen::Vector3d stop_pos);
+ 
+     /* local planning */
+@@ -105,17 +120,17 @@
+     bool planFromLocalTraj(const int trial_times = 1);
+ 
+     /* global trajectory */
+-    void waypointCallback(const quadrotor_msgs::GoalSetPtr &msg);
++    void waypointCallback(const quadrotor_msgs::msg::GoalSet::SharedPtr &msg);
+     void readGivenWpsAndPlan();
+     bool planNextWaypoint(const Eigen::Vector3d next_wp);
+     bool mondifyInCollisionFinalGoal();
+ 
+     /* input-output */
+-    void mandatoryStopCallback(const std_msgs::Empty &msg);
+-    void odometryCallback(const nav_msgs::OdometryConstPtr &msg);
+-    void triggerCallback(const geometry_msgs::PoseStampedPtr &msg);
+-    void RecvBroadcastMINCOTrajCallback(const traj_utils::MINCOTrajConstPtr &msg);
+-    void polyTraj2ROSMsg(traj_utils::PolyTraj &poly_msg, traj_utils::MINCOTraj &MINCO_msg);
++    void mandatoryStopCallback(const std_msgs::msg::Empty &msg);
++    void odometryCallback(const nav_msgs::msg::Odometry::ConstSharedPtr &msg);
++    void triggerCallback(const geometry_msgs::msg::PoseStamped::SharedPtr &msg);
++    void RecvBroadcastMINCOTrajCallback(const traj_utils::msg::MINCOTraj::ConstSharedPtr &msg);
++    void polyTraj2ROSMsg(traj_utils::msg::PolyTraj &poly_msg, traj_utils::msg::MINCOTraj &MINCO_msg);
+ 
+     /* ground height measurement */
+     bool measureGroundHeight(double &height);
+--- a/swarm-playground/main_ws/src/planner/plan_manage/include/plan_manage/planner_manager.h
++++ b/swarm-playground/main_ws/src/planner/plan_manage/include/plan_manage/planner_manager.h
+@@ -4,10 +4,10 @@
+ #include <stdlib.h>
+ 
+ #include <optimizer/poly_traj_optimizer.h>
+-#include <traj_utils/DataDisp.h>
++#include <traj_utils/msg/data_disp.hpp>
+ #include <plan_env/grid_map.h>
+ #include <traj_utils/plan_container.hpp>
+-#include <ros/ros.h>
++#include <ego_ros2/runtime.hpp>
+ #include <traj_utils/planning_visualization.h>
+ #include <optimizer/poly_traj_utils.hpp>
+ 
+@@ -27,7 +27,9 @@
+     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+ 
+     /* main planning interface */
+-    void initPlanModules(ros::NodeHandle &nh, PlanningVisualization::Ptr vis = NULL);
++    std::pair<size_t,size_t> mapBufferCapacity() const { return grid_map_->mapBufferCapacity(); }
++    void setVelocityLimit(double value) { pp_.max_vel_=value; ploy_traj_opt_->setVelocityLimit(value); }
++    void initPlanModules(ego_ros2::NodeHandle &nh, PlanningVisualization::Ptr vis = NULL);
+     bool computeInitState(
+         const Eigen::Vector3d &start_pt, const Eigen::Vector3d &start_vel,
+         const Eigen::Vector3d &start_acc, const Eigen::Vector3d &local_target_pt,
+@@ -42,7 +44,7 @@
+         const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel,
+         const Eigen::Vector3d &start_acc, const std::vector<Eigen::Vector3d> &waypoints,
+         const Eigen::Vector3d &end_vel, const Eigen::Vector3d &end_acc);
+-    void getLocalTarget(
++    bool getLocalTarget(
+         const double planning_horizen,
+         const Eigen::Vector3d &start_pt, const Eigen::Vector3d &global_end_pt,
+         Eigen::Vector3d &local_target_pos, Eigen::Vector3d &local_target_vel,
+--- a/swarm-playground/main_ws/src/planner/plan_manage/package.xml
++++ b/swarm-playground/main_ws/src/planner/plan_manage/package.xml
+@@ -1,84 +1 @@
+-<?xml version="1.0"?>
+-<package format="2">
+-  <name>ego_planner</name>
+-  <version>0.0.0</version>
+-  <description>The ego_planner package</description>
+-
+-  <!-- One maintainer tag required, multiple allowed, one person per tag -->
+-  <!-- Example:  -->
+-  <!-- <maintainer email="jane.doe@example.com">Jane Doe</maintainer> -->
+-  <maintainer email="iszhouxin@zju.edu.cn">iszhouxin</maintainer>
+-
+-
+-  <!-- One license tag required, multiple allowed, one license per tag -->
+-  <!-- Commonly used license strings: -->
+-  <!--   BSD, MIT, Boost Software License, GPLv2, GPLv3, LGPLv2.1, LGPLv3 -->
+-  <license>TODO</license>
+-
+-
+-  <!-- Url tags are optional, but multiple are allowed, one per tag -->
+-  <!-- Optional attribute type can be: website, bugtracker, or repository -->
+-  <!-- Example: -->
+-  <!-- <url type="website">http://wiki.ros.org/ego_planner</url> -->
+-
+-
+-  <!-- Author tags are optional, multiple are allowed, one per tag -->
+-  <!-- Authors do not have to be maintainers, but could be -->
+-  <!-- Example: -->
+-  <!-- <author email="jane.doe@example.com">Jane Doe</author> -->
+-
+-
+-  <!-- The *depend tags are used to specify dependencies -->
+-  <!-- Dependencies can be catkin packages or system dependencies -->
+-  <!-- Examples: -->
+-  <!-- Use depend as a shortcut for packages that are both build and exec dependencies -->
+-  <!--   <depend>roscpp</depend> -->
+-  <!--   Note that this is equivalent to the following: -->
+-  <!--   <build_depend>roscpp</build_depend> -->
+-  <!--   <exec_depend>roscpp</exec_depend> -->
+-  <!-- Use build_depend for packages you need at compile time: -->
+-  <!--   <build_depend>message_generation</build_depend> -->
+-  <!-- Use build_export_depend for packages you need in order to build against this package: -->
+-  <!--   <build_export_depend>message_generation</build_export_depend> -->
+-  <!-- Use buildtool_depend for build tool packages: -->
+-  <!--   <buildtool_depend>catkin</buildtool_depend> -->
+-  <!-- Use exec_depend for packages you need at runtime: -->
+-  <!--   <exec_depend>message_runtime</exec_depend> -->
+-  <!-- Use test_depend for packages you need only for testing: -->
+-  <!--   <test_depend>gtest</test_depend> -->
+-  <!-- Use doc_depend for packages you need only for building documentation: -->
+-  <!--   <doc_depend>doxygen</doc_depend> -->
+-  <buildtool_depend>catkin</buildtool_depend>
+-  <build_depend>roscpp</build_depend>
+-  <build_depend>std_msgs</build_depend>
+-  <build_depend>plan_env</build_depend>
+-  <build_depend>traj_opt</build_depend>
+-  <build_depend>traj_utils</build_depend>
+-  <build_depend>path_searching</build_depend>
+-
+-  <build_export_depend>roscpp</build_export_depend>
+-  <build_export_depend>std_msgs</build_export_depend>
+-  <build_export_depend>plan_env</build_export_depend>
+-  <build_export_depend>traj_utils</build_export_depend>
+-  <build_export_depend>traj_opt</build_export_depend>
+-  <build_export_depend>path_searching</build_export_depend>
+-
+-  <exec_depend>roscpp</exec_depend>
+-  <exec_depend>plan_env</exec_depend>
+-  <exec_depend>std_msgs</exec_depend>
+-  <exec_depend>message_runtime</exec_depend>
+-  <exec_depend>traj_utils</exec_depend>
+-  <exec_depend>traj_opt</exec_depend>
+-  <exec_depend>path_searching</exec_depend>
+-  
+-
+-
+-  <!-- The export tag contains other, unspecified, tags -->
+-  <export>
+-    <!-- Other tools can request additional information be placed here -->
+-
+-  </export>
+-</package>
+-
+-
+-<!-- catkin_make -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=Yes -->
++<package format="3"><name>ego_planner</name><version>0.1.0</version><description>ROS 2 port of pinned EGO-v2 ego_planner</description><maintainer email="ake@example.com">ake</maintainer><license>GPL-3.0</license><buildtool_depend>ament_cmake</buildtool_depend><depend>rclcpp</depend><depend>std_msgs</depend><depend>sensor_msgs</depend><depend>geometry_msgs</depend><depend>nav_msgs</depend><depend>visualization_msgs</depend><depend>cv_bridge</depend><depend>pcl_conversions</depend><depend>ego_ros2</depend><depend>quadrotor_msgs</depend><depend>plan_env</depend><depend>path_searching</depend><depend>traj_opt</depend><depend>traj_utils</depend><export><build_type>ament_cmake</build_type></export></package>
+--- a/swarm-playground/main_ws/src/planner/plan_manage/src/ego_planner_node.cpp
++++ b/swarm-playground/main_ws/src/planner/plan_manage/src/ego_planner_node.cpp
+@@ -1,14 +1,14 @@
+-// #include <ros/ros.h>
++// #include <ego_ros2/runtime.hpp>
+ // #include <csignal>
+-// #include <visualization_msgs/Marker.h>
++// #include <visualization_msgs/msg/marker.hpp>
+ 
+ // #include <plan_manage/ego_replan_fsm.h>
+ 
+ // using namespace ego_planner;
+ 
+ // void SignalHandler(int signal) {
+-//   if(ros::isInitialized() && ros::isStarted() && ros::ok() && !ros::isShuttingDown()){
+-//     ros::shutdown();
++//   if(ego_ros2::isInitialized() && ego_ros2::isStarted() && ego_ros2::ok() && !ego_ros2::isShuttingDown()){
++//     ego_ros2::shutdown();
+ //   }
+ // }
+ 
+@@ -17,23 +17,23 @@
+ //   signal(SIGINT, SignalHandler);
+ //   signal(SIGTERM,SignalHandler);
+ 
+-//   ros::init(argc, argv, "ego_planner_node", ros::init_options::NoSigintHandler);
+-//   ros::NodeHandle nh("~");
++//   ego_ros2::init(argc, argv, "ego_planner_node", ego_ros2::init_options::NoSigintHandler);
++//   ego_ros2::NodeHandle nh("~");
+ 
+ //   EGOReplanFSM rebo_replan;
+ 
+ //   rebo_replan.init(nh);
+ 
+-//   // ros::Duration(1.0).sleep();
+-//   ros::AsyncSpinner async_spinner(4);
++//   // ego_ros2::Duration(1.0).sleep();
++//   ego_ros2::AsyncSpinner async_spinner(4);
+ //   async_spinner.start();
+-//   ros::waitForShutdown();
++//   ego_ros2::waitForShutdown();
+ 
+ //   return 0;
+ // }
+ 
+-#include <ros/ros.h>
+-#include <visualization_msgs/Marker.h>
++#include <ego_ros2/runtime.hpp>
++#include <visualization_msgs/msg/marker.hpp>
+ 
+ #include <plan_manage/ego_replan_fsm.h>
+ 
+@@ -42,15 +42,15 @@
+ int main(int argc, char **argv)
+ {
+ 
+-  ros::init(argc, argv, "ego_planner_node");
+-  ros::NodeHandle nh("~");
++  ego_ros2::init(argc, argv, "ego_planner_node");
++  ego_ros2::NodeHandle nh("~");
+ 
+   EGOReplanFSM rebo_replan;
+ 
+   rebo_replan.init(nh);
+ 
+-  // ros::Duration(1.0).sleep();
+-  ros::spin();
++  // ego_ros2::Duration(1.0).sleep();
++  ego_ros2::spin();
+ 
+   return 0;
+ }
+--- a/swarm-playground/main_ws/src/planner/plan_manage/src/ego_replan_fsm.cpp
++++ b/swarm-playground/main_ws/src/planner/plan_manage/src/ego_replan_fsm.cpp
+@@ -4,8 +4,9 @@
+ namespace ego_planner
+ {
+ 
+-  void EGOReplanFSM::init(ros::NodeHandle &nh)
+-  {
++  void EGOReplanFSM::init(ego_ros2::NodeHandle &nh)
++  {
++    planning_metrics_pub_ = nh.advertise<std_msgs::msg::Float64MultiArray>("/autonomy/planning_metrics", 10);
+     exec_state_ = FSM_EXEC_STATE::INIT;
+     have_target_ = false;
+     have_odom_ = false;
+@@ -39,24 +40,43 @@
+     have_trigger_ = !flag_realworld_experiment_;
+     no_replan_thresh_ = 0.5 * emergency_time_ * planner_manager_->pp_.max_vel_;
+ 
++    // The controller/observation guard owns execution permission. Reset the
++    // FSM after a rejection so the next plan starts from measured state.
++    permission_sub_ = ego_ros2::node->create_subscription<std_msgs::msg::Bool>(
++      "/autonomy/execution_allowed", rclcpp::QoS(1).transient_local(),
++      [this](std_msgs::msg::Bool::ConstSharedPtr m) {
++        execution_allowed_=m->data;
++        if(!m->data) awaiting_acceptance_=false;
++        if(!m->data) { have_target_=false; have_trigger_=true; exec_state_=WAIT_TARGET; }
++      });
++    acceptance_sub_ = ego_ros2::node->create_subscription<std_msgs::msg::UInt64>(
++      "/autonomy/native_accepted", 10, [this](std_msgs::msg::UInt64::ConstSharedPtr m) {
++        if(m->data==awaiting_native_id_) awaiting_acceptance_=false;
++      });
++    velocity_limit_sub_ = ego_ros2::node->create_subscription<std_msgs::msg::Float64>(
++      "/autonomy/speed_limit", 10, [this](std_msgs::msg::Float64::ConstSharedPtr m) {
++        // MINCO uses soft feasibility penalties. Reserve headroom in its
++        // native optimisation, rather than clipping the executed reference.
++        if(std::isfinite(m->data) && m->data>=.1 && m->data<=1) planner_manager_->setVelocityLimit(.8*m->data);
++      });
+     /* callback */
+-    exec_timer_ = nh.createTimer(ros::Duration(0.01), &EGOReplanFSM::execFSMCallback, this);
+-    safety_timer_ = nh.createTimer(ros::Duration(0.05), &EGOReplanFSM::checkCollisionCallback, this);
++    exec_timer_ = nh.createTimer(ego_ros2::Duration(0.01), &EGOReplanFSM::execFSMCallback, this);
++    safety_timer_ = nh.createTimer(ego_ros2::Duration(0.05), &EGOReplanFSM::checkCollisionCallback, this);
+ 
+     odom_sub_ = nh.subscribe("odom_world", 1, &EGOReplanFSM::odometryCallback, this);
+     mandatory_stop_sub_ = nh.subscribe("mandatory_stop", 1, &EGOReplanFSM::mandatoryStopCallback, this);
+ 
+     /* Use MINCO trajectory to minimize the message size in wireless communication */
+-    broadcast_ploytraj_pub_ = nh.advertise<traj_utils::MINCOTraj>("planning/broadcast_traj_send", 10);
+-    broadcast_ploytraj_sub_ = nh.subscribe<traj_utils::MINCOTraj>("planning/broadcast_traj_recv", 100,
++    broadcast_ploytraj_pub_ = nh.advertise<traj_utils::msg::MINCOTraj>("planning/broadcast_traj_send", 10);
++    broadcast_ploytraj_sub_ = nh.subscribe<traj_utils::msg::MINCOTraj>("planning/broadcast_traj_recv", 100,
+                                                                   &EGOReplanFSM::RecvBroadcastMINCOTrajCallback,
+                                                                   this,
+-                                                                  ros::TransportHints().tcpNoDelay());
+-
+-    poly_traj_pub_ = nh.advertise<traj_utils::PolyTraj>("planning/trajectory", 10);
+-    data_disp_pub_ = nh.advertise<traj_utils::DataDisp>("planning/data_display", 100);
+-    heartbeat_pub_ = nh.advertise<std_msgs::Empty>("planning/heartbeat", 10);
+-    ground_height_pub_ = nh.advertise<std_msgs::Float64>("/ground_height_measurement", 10);
++                                                                  ego_ros2::TransportHints().tcpNoDelay());
++
++    poly_traj_pub_ = nh.advertise<traj_utils::msg::PolyTraj>("planning/trajectory", 10);
++    data_disp_pub_ = nh.advertise<traj_utils::msg::DataDisp>("planning/data_display", 100);
++    heartbeat_pub_ = nh.advertise<std_msgs::msg::Empty>("planning/heartbeat", 10);
++    ground_height_pub_ = nh.advertise<std_msgs::msg::Float64>("/ground_height_measurement", 10);
+ 
+     if (target_type_ == TARGET_TYPE::MANUAL_TARGET)
+     {
+@@ -68,10 +88,10 @@
+ 
+       ROS_INFO("Wait for 2 second.");
+       int count = 0;
+-      while (ros::ok() && count++ < 2000)
+-      {
+-        ros::spinOnce();
+-        ros::Duration(0.001).sleep();
++      while (ego_ros2::ok() && count++ < 2000)
++      {
++        ego_ros2::spinOnce();
++        ego_ros2::Duration(0.001).sleep();
+       }
+ 
+       readGivenWpsAndPlan();
+@@ -80,10 +100,13 @@
+       cout << "Wrong target_type_ value! target_type_=" << target_type_ << endl;
+   }
+ 
+-  void EGOReplanFSM::execFSMCallback(const ros::TimerEvent &e)
+-  {
++  void EGOReplanFSM::execFSMCallback(const ego_ros2::TimerEvent &e)
++  {
++    if(awaiting_acceptance_) return;
++    if(!execution_allowed_ || ego_ros2::Time::now().toSec()<=last_execution_time_) return;
++    last_execution_time_=ego_ros2::Time::now().toSec();
+     exec_timer_.stop(); // To avoid blockage
+-    std_msgs::Empty heartbeat_msg;
++    std_msgs::msg::Empty heartbeat_msg;
+     heartbeat_pub_.publish(heartbeat_msg);
+ 
+     static int fsm_num = 0;
+@@ -171,7 +194,7 @@
+     {
+       /* determine if need to replan */
+       LocalTrajData *info = &planner_manager_->traj_.local_traj;
+-      double t_cur = ros::Time::now().toSec() - info->start_time;
++      double t_cur = ego_ros2::Time::now().toSec() - info->start_time;
+       t_cur = min(info->duration, t_cur);
+       Eigen::Vector3d pos = info->traj.getPos(t_cur);
+       bool touch_the_goal = ((local_target_pt_ - final_goal_).norm() < 1e-2);
+@@ -231,7 +254,7 @@
+     }
+     }
+ 
+-    data_disp_.header.stamp = ros::Time::now();
++    data_disp_.header.stamp = ego_ros2::Time::now();
+     data_disp_pub_.publish(data_disp_);
+ 
+   force_return:;
+@@ -289,8 +312,9 @@
+     return std::pair<int, FSM_EXEC_STATE>(continously_called_times_, exec_state_);
+   }
+ 
+-  void EGOReplanFSM::checkCollisionCallback(const ros::TimerEvent &e)
+-  {
++  void EGOReplanFSM::checkCollisionCallback(const ego_ros2::TimerEvent &e)
++  {
++    if(!execution_allowed_ || awaiting_acceptance_) return;
+     // check ground height by the way
+     if (enable_ground_height_measurement_)
+     {
+@@ -301,7 +325,7 @@
+     /* --------- collision check data ---------- */
+     LocalTrajData *info = &planner_manager_->traj_.local_traj;
+     auto map = planner_manager_->grid_map_;
+-    const double t_cur = ros::Time::now().toSec() - info->start_time;
++    const double t_cur = ego_ros2::Time::now().toSec() - info->start_time;
+     PtsChk_t pts_chk = info->pts_chk;
+ 
+     if (exec_state_ == WAIT_TARGET || info->traj_id <= 0)
+@@ -408,9 +432,10 @@
+ 
+     planner_manager_->EmergencyStop(stop_pos);
+ 
+-    traj_utils::PolyTraj poly_msg;
+-    traj_utils::MINCOTraj MINCO_msg;
++    traj_utils::msg::PolyTraj poly_msg;
++    traj_utils::msg::MINCOTraj MINCO_msg;
+     polyTraj2ROSMsg(poly_msg, MINCO_msg);
++    awaiting_native_id_=planner_manager_->traj_.local_traj.traj_id; awaiting_acceptance_=true;
+     poly_traj_pub_.publish(poly_msg);
+     broadcast_ploytraj_pub_.publish(MINCO_msg);
+ 
+@@ -419,11 +444,12 @@
+ 
+   bool EGOReplanFSM::callReboundReplan(bool flag_use_poly_init, bool flag_randomPolyTraj)
+   {
+-
+-    planner_manager_->getLocalTarget(
++    const auto planning_began = std::chrono::steady_clock::now();
++
++    if(!planner_manager_->getLocalTarget(
+         planning_horizen_, start_pt_, final_goal_,
+         local_target_pt_, local_target_vel_,
+-        touch_goal_);
++        touch_goal_)) return false;
+ 
+     bool plan_success = planner_manager_->reboundReplan(
+         start_pt_, start_vel_, start_acc_,
+@@ -431,15 +457,20 @@
+         (have_new_target_ || flag_use_poly_init),
+         flag_randomPolyTraj, touch_goal_);
+ 
++    auto capacity = planner_manager_->mapBufferCapacity();
++    std_msgs::msg::Float64MultiArray metrics;
++    metrics.data = {std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now()-planning_began).count(), plan_success ? 1.0 : 0.0, double(capacity.first), double(capacity.second)};
++    planning_metrics_pub_.publish(metrics);
+     have_new_target_ = false;
+ 
+     if (plan_success)
+     {
+ 
+-      traj_utils::PolyTraj poly_msg;
+-      traj_utils::MINCOTraj MINCO_msg;
++      traj_utils::msg::PolyTraj poly_msg;
++      traj_utils::msg::MINCOTraj MINCO_msg;
+       polyTraj2ROSMsg(poly_msg, MINCO_msg);
+-      poly_traj_pub_.publish(poly_msg);
++      awaiting_native_id_=planner_manager_->traj_.local_traj.traj_id; awaiting_acceptance_=true;
++    poly_traj_pub_.publish(poly_msg);
+       broadcast_ploytraj_pub_.publish(MINCO_msg);
+     }
+ 
+@@ -473,7 +504,7 @@
+   {
+ 
+     LocalTrajData *info = &planner_manager_->traj_.local_traj;
+-    double t_cur = ros::Time::now().toSec() - info->start_time;
++    double t_cur = ego_ros2::Time::now().toSec() - info->start_time;
+ 
+     start_pt_ = info->traj.getPos(t_cur);
+     start_vel_ = info->traj.getVel(t_cur);
+@@ -504,6 +535,12 @@
+ 
+   bool EGOReplanFSM::planNextWaypoint(const Eigen::Vector3d next_wp)
+   {
++    if (awaiting_acceptance_)
++    {
++      awaiting_acceptance_ = false;
++      exec_state_ = WAIT_TARGET;
++    }
++
+     bool success = false;
+     std::vector<Eigen::Vector3d> one_pt_wps;
+     one_pt_wps.push_back(next_wp);
+@@ -530,15 +567,12 @@
+       have_new_target_ = true;
+ 
+       /*** FSM ***/
+-      if (exec_state_ != WAIT_TARGET)
+-      {
+-        while (exec_state_ != EXEC_TRAJ)
+-        {
+-          ros::spinOnce();
+-          ros::Duration(0.001).sleep();
+-        }
++      // ROS 2 callbacks cannot recursively spin a node in its executor.
++      // A new target while initial planning failed restarts from feedback.
++      if (exec_state_ == EXEC_TRAJ)
+         changeFSMExecState(REPLAN_TRAJ, "TRIG");
+-      }
++      else if (exec_state_ != WAIT_TARGET)
++        changeFSMExecState(SEQUENTIAL_START, "TRIG");
+ 
+       // visualization_->displayGoalPoint(final_goal_, Eigen::Vector4d(1, 0, 0, 1), 0.3, 0);
+       visualization_->displayGlobalPathList(gloabl_traj, 0.1, 0);
+@@ -580,7 +614,7 @@
+     return false;
+   }
+ 
+-  void EGOReplanFSM::waypointCallback(const quadrotor_msgs::GoalSetPtr &msg)
++  void EGOReplanFSM::waypointCallback(const quadrotor_msgs::msg::GoalSet::SharedPtr &msg)
+   {
+     if (msg->drone_id != planner_manager_->pp_.drone_id || msg->goal[2] < -0.1)
+       return;
+@@ -613,7 +647,7 @@
+     for (size_t i = 0; i < (size_t)waypoint_num_; i++)
+     {
+       visualization_->displayGoalPoint(wps_[i], Eigen::Vector4d(0, 0.5, 0.5, 1), 0.3, i);
+-      ros::Duration(0.001).sleep();
++      ego_ros2::Duration(0.001).sleep();
+     }
+ 
+     // plan first global waypoint
+@@ -621,7 +655,7 @@
+     planNextWaypoint(wps_[wpt_id_]);
+   }
+ 
+-  void EGOReplanFSM::mandatoryStopCallback(const std_msgs::Empty &msg)
++  void EGOReplanFSM::mandatoryStopCallback(const std_msgs::msg::Empty &msg)
+   {
+     mandatory_stop_ = true;
+     ROS_ERROR("Received a mandatory stop command!");
+@@ -629,7 +663,7 @@
+     enable_fail_safe_ = false;
+   }
+ 
+-  void EGOReplanFSM::odometryCallback(const nav_msgs::OdometryConstPtr &msg)
++  void EGOReplanFSM::odometryCallback(const nav_msgs::msg::Odometry::ConstSharedPtr &msg)
+   {
+     odom_pos_(0) = msg->pose.pose.position.x;
+     odom_pos_(1) = msg->pose.pose.position.y;
+@@ -642,13 +676,13 @@
+     have_odom_ = true;
+   }
+ 
+-  void EGOReplanFSM::triggerCallback(const geometry_msgs::PoseStampedPtr &msg)
++  void EGOReplanFSM::triggerCallback(const geometry_msgs::msg::PoseStamped::SharedPtr &msg)
+   {
+     have_trigger_ = true;
+     cout << "Triggered!" << endl;
+   }
+ 
+-  void EGOReplanFSM::RecvBroadcastMINCOTrajCallback(const traj_utils::MINCOTrajConstPtr &msg)
++  void EGOReplanFSM::RecvBroadcastMINCOTrajCallback(const traj_utils::msg::MINCOTraj::ConstSharedPtr &msg)
+   {
+     const size_t recv_id = (size_t)msg->drone_id;
+     if ((int)recv_id == planner_manager_->pp_.drone_id) // myself
+@@ -671,13 +705,13 @@
+     }
+     if (planner_manager_->traj_.swarm_traj.size() > recv_id &&
+         planner_manager_->traj_.swarm_traj[recv_id].drone_id == (int)recv_id &&
+-        msg->start_time.toSec() - planner_manager_->traj_.swarm_traj[recv_id].start_time <= 0)
++        ego_ros2::Time(msg->start_time).toSec() - planner_manager_->traj_.swarm_traj[recv_id].start_time <= 0)
+     {
+       ROS_WARN("Received drone %d's trajectory out of order or duplicated, abandon it.", (int)recv_id);
+       return;
+     }
+ 
+-    ros::Time t_now = ros::Time::now();
++    ego_ros2::Time t_now = ego_ros2::Time::now();
+     if (abs((t_now - msg->start_time).toSec()) > 0.25)
+     {
+ 
+@@ -706,7 +740,7 @@
+       }
+     }
+ 
+-    if ( msg->start_time.toSec() <= planner_manager_->traj_.swarm_traj[recv_id].start_time ) // This must be called after buffer fill-up
++    if ( ego_ros2::Time(msg->start_time).toSec() <= planner_manager_->traj_.swarm_traj[recv_id].start_time ) // This must be called after buffer fill-up
+     {
+       ROS_WARN("Old traj received, ignored.");
+       return;
+@@ -749,7 +783,7 @@
+       planner_manager_->traj_.swarm_traj[recv_id].traj = trajectory;
+       planner_manager_->traj_.swarm_traj[recv_id].drone_id = recv_id;
+       planner_manager_->traj_.swarm_traj[recv_id].traj_id = msg->traj_id;
+-      planner_manager_->traj_.swarm_traj[recv_id].start_time = msg->start_time.toSec();
++      planner_manager_->traj_.swarm_traj[recv_id].start_time = ego_ros2::Time(msg->start_time).toSec();
+       planner_manager_->traj_.swarm_traj[recv_id].duration = trajectory.getTotalDuration();
+       planner_manager_->traj_.swarm_traj[recv_id].start_pos = trajectory.getPos(0.0);
+       planner_manager_->traj_.swarm_traj[recv_id].des_clearance = msg->des_clearance;
+@@ -783,7 +817,7 @@
+     }
+   }
+ 
+-  void EGOReplanFSM::polyTraj2ROSMsg(traj_utils::PolyTraj &poly_msg, traj_utils::MINCOTraj &MINCO_msg)
++  void EGOReplanFSM::polyTraj2ROSMsg(traj_utils::msg::PolyTraj &poly_msg, traj_utils::msg::MINCOTraj &MINCO_msg)
+   {
+ 
+     auto data = &planner_manager_->traj_.local_traj;
+@@ -792,7 +826,7 @@
+ 
+     poly_msg.drone_id = planner_manager_->pp_.drone_id;
+     poly_msg.traj_id = data->traj_id;
+-    poly_msg.start_time = ros::Time(data->start_time);
++    poly_msg.start_time = ego_ros2::Time(data->start_time);
+     poly_msg.order = 5; // todo, only support order = 5 now.
+     poly_msg.duration.resize(piece_num);
+     poly_msg.coef_x.resize(6 * piece_num);
+@@ -814,7 +848,7 @@
+ 
+     MINCO_msg.drone_id = planner_manager_->pp_.drone_id;
+     MINCO_msg.traj_id = data->traj_id;
+-    MINCO_msg.start_time = ros::Time(data->start_time);
++    MINCO_msg.start_time = ego_ros2::Time(data->start_time);
+     MINCO_msg.order = 5; // todo, only support order = 5 now.
+     MINCO_msg.duration.resize(piece_num);
+     MINCO_msg.des_clearance = planner_manager_->getSwarmClearance();
+@@ -854,7 +888,7 @@
+ 
+     auto traj = &planner_manager_->traj_.local_traj;
+     auto map = planner_manager_->grid_map_;
+-    ros::Time t_now = ros::Time::now();
++    ego_ros2::Time t_now = ego_ros2::Time::now();
+ 
+     double forward_t = 2.0 / planner_manager_->pp_.max_vel_; //2.0m
+     double traj_t = (t_now.toSec() - traj->start_time) + forward_t;
+@@ -874,7 +908,7 @@
+         {
+           height = forward_p(2);
+ 
+-          std_msgs::Float64 height_msg;
++          std_msgs::msg::Float64 height_msg;
+           height_msg.data = height;
+           ground_height_pub_.publish(height_msg);
+ 
+--- a/swarm-playground/main_ws/src/planner/plan_manage/src/planner_manager.cpp
++++ b/swarm-playground/main_ws/src/planner/plan_manage/src/planner_manager.cpp
+@@ -1,7 +1,7 @@
+ // #include <fstream>
+ #include <plan_manage/planner_manager.h>
+ #include <thread>
+-#include "visualization_msgs/Marker.h" // zx-todo
++#include <visualization_msgs/msg/marker.hpp> // zx-todo
+ 
+ namespace ego_planner
+ {
+@@ -12,7 +12,7 @@
+ 
+   EGOPlannerManager::~EGOPlannerManager() { std::cout << "des manager" << std::endl; }
+ 
+-  void EGOPlannerManager::initPlanModules(ros::NodeHandle &nh, PlanningVisualization::Ptr vis)
++  void EGOPlannerManager::initPlanModules(ego_ros2::NodeHandle &nh, PlanningVisualization::Ptr vis)
+   {
+     /* read algorithm parameters */
+ 
+@@ -43,11 +43,11 @@
+       const Eigen::Vector3d &local_target_vel, const bool flag_polyInit,
+       const bool flag_randomPolyTraj, const bool touch_goal)
+   {
+-    ros::Time t_start = ros::Time::now();
+-    ros::Duration t_init, t_opt;
++    ego_ros2::Time t_start = ego_ros2::Time::now();
++    ego_ros2::Duration t_init, t_opt;
+ 
+     static int count = 0;
+-    cout << "\033[47;30m\n[" << t_start << "] Drone " << pp_.drone_id << " Replan " << count++ << "\033[0m" << endl;
++    cout << "\033[47;30m\n[" << t_start.toSec() << "] Drone " << pp_.drone_id << " Replan " << count++ << "\033[0m" << endl;
+     // cout.precision(3);
+     // cout << "start: " << start_pt.transpose() << ", " << start_vel.transpose() << "\ngoal:" << local_target_pt.transpose() << ", " << local_target_vel.transpose()
+     //      << endl;
+@@ -72,14 +72,14 @@
+       return false;
+     }
+ 
+-    t_init = ros::Time::now() - t_start;
++    t_init = ego_ros2::Time::now() - t_start;
+ 
+     std::vector<Eigen::Vector3d> point_set;
+     for (int i = 0; i < cstr_pts.cols(); ++i)
+       point_set.push_back(cstr_pts.col(i));
+     visualization_->displayInitPathList(point_set, 0.2, 0);
+ 
+-    t_start = ros::Time::now();
++    t_start = ego_ros2::Time::now();
+ 
+     /*** STEP 2: OPTIMIZE ***/
+     bool flag_success = false;
+@@ -128,7 +128,7 @@
+         }
+       }
+ 
+-      t_opt = ros::Time::now() - t_start;
++      t_opt = ego_ros2::Time::now() - t_start;
+ 
+       if (trajs.size() > 1)
+       {
+@@ -153,7 +153,7 @@
+                                                         innerPts, initTraj.getDurations(), final_cost);
+       best_MJO = ploy_traj_opt_->getMinJerkOpt();
+ 
+-      t_opt = ros::Time::now() - t_start;
++      t_opt = ego_ros2::Time::now() - t_start;
+     }
+ 
+     /*** STEP 3: Store and display results ***/
+@@ -276,7 +276,7 @@
+       }
+ 
+       /* the trajectory time system is a little bit complicated... */
+-      double passed_t_on_lctraj = ros::Time::now().toSec() - traj_.local_traj.start_time;
++      double passed_t_on_lctraj = ego_ros2::Time::now().toSec() - traj_.local_traj.start_time;
+       double t_to_lc_end = traj_.local_traj.duration - passed_t_on_lctraj;
+       if (t_to_lc_end < 0)
+       {
+@@ -322,48 +322,62 @@
+     return true;
+   }
+ 
+-  void EGOPlannerManager::getLocalTarget(
++  bool EGOPlannerManager::getLocalTarget(
+       const double planning_horizen, const Eigen::Vector3d &start_pt,
+       const Eigen::Vector3d &global_end_pt, Eigen::Vector3d &local_target_pos,
+       Eigen::Vector3d &local_target_vel, bool &touch_goal)
+   {
+-    double t;
+     touch_goal = false;
+-
+-    traj_.global_traj.last_glb_t_of_lc_tgt = traj_.global_traj.glb_t_of_lc_tgt;
+-
+-    double t_step = planning_horizen / 20 / pp_.max_vel_;
+-    // double dist_min = 9999, dist_min_t = 0.0;
+-    for (t = traj_.global_traj.glb_t_of_lc_tgt;
+-         t < (traj_.global_traj.global_start_time + traj_.global_traj.duration);
+-         t += t_step)
+-    {
+-      Eigen::Vector3d pos_t = traj_.global_traj.traj.getPos(t - traj_.global_traj.global_start_time);
+-      double dist = (pos_t - start_pt).norm();
+-
+-      if (dist >= planning_horizen)
+-      {
+-        local_target_pos = pos_t;
+-        traj_.global_traj.glb_t_of_lc_tgt = t;
+-        break;
+-      }
+-    }
+-
+-    if ((t - traj_.global_traj.global_start_time) >= traj_.global_traj.duration - 1e-5) // Last global point
+-    {
+-      local_target_pos = global_end_pt;
+-      traj_.global_traj.glb_t_of_lc_tgt = traj_.global_traj.global_start_time + traj_.global_traj.duration;
+-      touch_goal = true;
+-    }
+-
+-    if ((global_end_pt - local_target_pos).norm() < (pp_.max_vel_ * pp_.max_vel_) / (2 * pp_.max_acc_))
+-    {
+-      local_target_vel = Eigen::Vector3d::Zero();
+-    }
++    auto &global = traj_.global_traj;
++    global.last_glb_t_of_lc_tgt = global.glb_t_of_lc_tgt;
++    const double end_time = global.global_start_time + global.duration;
++    const double t_step = planning_horizen / 20 / pp_.max_vel_;
++    const double margin = 0.85;
++    double selected_time = global.glb_t_of_lc_tgt, fallback_time = selected_time;
++    Eigen::Vector3d fallback = start_pt;
++    bool selected = false, have_fallback = false;
++    // The original horizon can end inside a measured tree. Search farther
++    // along the original global reference, strictly inside the native rolling
++    // window. MINCO/A* still choose the collision-free connecting geometry.
++    for (double t = global.glb_t_of_lc_tgt; t < end_time; t += t_step) {
++      Eigen::Vector3d point = global.traj.getPos(t-global.global_start_time);
++      double distance = (point-start_pt).norm();
++      if (!grid_map_->inLocalWindow(point, margin)) {
++        if (distance>=planning_horizen) break;
++        continue;
++      }
++      if (grid_map_->getInflateOccupancy(point)!=0) continue;
++      if (distance>.5) {
++        fallback = point; fallback_time = t; have_fallback = true;
++      }
++      if (distance>=planning_horizen) {
++        local_target_pos = point; selected_time = t; selected = true; break;
++      }
++    }
++    if (!selected && grid_map_->inLocalWindow(global_end_pt, margin) &&
++        grid_map_->getInflateOccupancy(global_end_pt)==0) {
++      local_target_pos = global_end_pt; selected_time = end_time;
++      selected = true; touch_goal = true;
++    }
++    if (!selected) {
++      local_target_pos = have_fallback ? fallback : start_pt;
++      selected_time = have_fallback ? fallback_time : global.glb_t_of_lc_tgt;
++    }
++    if(!selected && !have_fallback) return false;
++    global.glb_t_of_lc_tgt = selected_time;
++    if (!selected || touch_goal ||
++        (global_end_pt-local_target_pos).norm()<(pp_.max_vel_*pp_.max_vel_)/(2*pp_.max_acc_))
++      local_target_vel.setZero();
+     else
+-    {
+-      local_target_vel = traj_.global_traj.traj.getVel(t - traj_.global_traj.global_start_time);
+-    }
++      local_target_vel = global.traj.getVel(selected_time-global.global_start_time);
++    // A speed update can retain a global seed generated at the previous
++    // limit. Its terminal derivative must fit the NEW MINCO boundary
++    // conditions; otherwise no amount of feasibility penalty can satisfy
++    // the reduced cap. This changes planning input, never an output sample.
++    const double target_speed = local_target_vel.norm();
++    if (target_speed > pp_.max_vel_)
++      local_target_vel *= pp_.max_vel_ / target_speed;
++    return true;
+   }
+ 
+   bool EGOPlannerManager::setLocalTrajFromOpt(const poly_traj::MinJerkOpt &opt, const bool touch_goal)
+@@ -374,7 +388,7 @@
+     bool ret = ploy_traj_opt_->computePointsToCheck(traj, ConstraintPoints::two_thirds_id(cps, touch_goal), pts_to_check);
+     if (ret && pts_to_check.size() >= 1 && pts_to_check.back().size() >= 1)
+     {
+-      traj_.setLocalTraj(traj, pts_to_check, ros::Time::now().toSec());
++      traj_.setLocalTraj(traj, pts_to_check, ego_ros2::Time::now().toSec());
+     }
+ 
+     return ret;
+@@ -397,7 +411,7 @@
+ 
+   bool EGOPlannerManager::checkCollision(int drone_id)
+   {
+-    if (traj_.local_traj.start_time < 1e9) // It means my first planning has not started
++    if (traj_.local_traj.duration <= 0) // It means my first planning has not started
+       return false;
+     if (traj_.swarm_traj[drone_id].drone_id != drone_id) // The trajectory is invalid
+       return false;
+@@ -430,7 +444,21 @@
+ 
+     poly_traj::MinJerkOpt globalMJO;
+     Eigen::Matrix<double, 3, 3> headState, tailState;
+-    headState << start_pos, start_vel, start_acc;
++    // This long-range polynomial is a GEOMETRIC guide for local target
++    // selection, never the executed MINCO trajectory. At low speed a distant
++    // B has hundreds of seconds of guide duration; centimetre/s transverse
++    // hover feedback can bend it metres outside the local flight slab.
++    // For one destination retain only nonnegative along-goal seed velocity.
++    // reboundReplan still receives the ORIGINAL measured p/v/a boundary.
++    Eigen::Vector3d guide_velocity = start_vel;
++    if (waypoints.size() == 1) {
++      const Eigen::Vector3d delta = waypoints.front() - start_pos;
++      if (delta.norm() > 1e-6) {
++        const Eigen::Vector3d tangent = delta.normalized();
++        guide_velocity = tangent * std::max(0.0, std::min(pp_.max_vel_, start_vel.dot(tangent)));
++      } else guide_velocity.setZero();
++    }
++    headState << start_pos, guide_velocity, start_acc;
+     tailState << waypoints.back(), end_vel, end_acc;
+     Eigen::MatrixXd innerPts;
+ 
+@@ -485,7 +513,7 @@
+       des_vel /= 1.5;
+     }
+ 
+-    auto time_now = ros::Time::now();
++    auto time_now = ego_ros2::Time::now();
+     traj_.setGlobalTraj(globalMJO.getTraj(), time_now.toSec());
+ 
+     return true;
+--- a/swarm-playground/main_ws/src/planner/plan_manage/src/traj_server.cpp
++++ b/swarm-playground/main_ws/src/planner/plan_manage/src/traj_server.cpp
+@@ -1,16 +1,16 @@
+-#include <nav_msgs/Odometry.h>
+-#include <traj_utils/PolyTraj.h>
++#include <nav_msgs/msg/odometry.hpp>
++#include <traj_utils/msg/poly_traj.hpp>
+ #include <optimizer/poly_traj_utils.hpp>
+-#include <quadrotor_msgs/PositionCommand.h>
+-#include <std_msgs/Empty.h>
+-#include <visualization_msgs/Marker.h>
+-#include <ros/ros.h>
++#include <quadrotor_msgs/msg/position_command.hpp>
++#include <std_msgs/msg/empty.hpp>
++#include <visualization_msgs/msg/marker.hpp>
++#include <ego_ros2/runtime.hpp>
+ 
+ using namespace Eigen;
+ 
+-ros::Publisher pos_cmd_pub;
+-
+-quadrotor_msgs::PositionCommand cmd;
++ego_ros2::Publisher pos_cmd_pub;
++
++quadrotor_msgs::msg::PositionCommand cmd;
+ // double pos_gain[3] = {0, 0, 0};
+ // double vel_gain[3] = {0, 0, 0};
+ 
+@@ -20,21 +20,21 @@
+ bool receive_traj_ = false;
+ boost::shared_ptr<poly_traj::Trajectory> traj_;
+ double traj_duration_;
+-ros::Time start_time_;
++ego_ros2::Time start_time_;
+ int traj_id_;
+-ros::Time heartbeat_time_(0);
++ego_ros2::Time heartbeat_time_(0);
+ Eigen::Vector3d last_pos_;
+ 
+ // yaw control
+ double last_yaw_, last_yawdot_, slowly_flip_yaw_target_, slowly_turn_to_center_target_;
+ double time_forward_;
+ 
+-void heartbeatCallback(std_msgs::EmptyPtr msg)
+-{
+-  heartbeat_time_ = ros::Time::now();
+-}
+-
+-void polyTrajCallback(traj_utils::PolyTrajPtr msg)
++void heartbeatCallback(std_msgs::msg::Empty::SharedPtr msg)
++{
++  heartbeat_time_ = ego_ros2::Time::now();
++}
++
++void polyTrajCallback(traj_utils::msg::PolyTraj::SharedPtr msg)
+ {
+   if (msg->order != 5)
+   {
+@@ -136,9 +136,9 @@
+ void publish_cmd(Vector3d p, Vector3d v, Vector3d a, Vector3d j, double y, double yd)
+ {
+ 
+-  cmd.header.stamp = ros::Time::now();
++  cmd.header.stamp = ego_ros2::Time::now();
+   cmd.header.frame_id = "world";
+-  cmd.trajectory_flag = quadrotor_msgs::PositionCommand::TRAJECTORY_STATUS_READY;
++  cmd.trajectory_flag = quadrotor_msgs::msg::PositionCommand::TRAJECTORY_STATUS_READY;
+   cmd.trajectory_id = traj_id_;
+ 
+   cmd.position.x = p(0);
+@@ -160,7 +160,7 @@
+   last_pos_ = p;
+ }
+ 
+-void cmdCallback(const ros::TimerEvent &e)
++void cmdCallback(const ego_ros2::TimerEvent &e)
+ {
+   /* no publishing before receive traj_ and have heartbeat */
+   if (heartbeat_time_.toSec() <= 1e-5)
+@@ -171,7 +171,7 @@
+   if (!receive_traj_)
+     return;
+ 
+-  ros::Time time_now = ros::Time::now();
++  ego_ros2::Time time_now = ego_ros2::Time::now();
+ 
+   if ((time_now - heartbeat_time_).toSec() > 0.5)
+   {
+@@ -186,7 +186,7 @@
+   Eigen::Vector3d pos(Eigen::Vector3d::Zero()), vel(Eigen::Vector3d::Zero()), acc(Eigen::Vector3d::Zero()), jer(Eigen::Vector3d::Zero());
+   std::pair<double, double> yaw_yawdot(0, 0);
+ 
+-  static ros::Time time_last = ros::Time::now();
++  static ego_ros2::Time time_last = ego_ros2::Time::now();
+ #if FLIP_YAW_AT_END or TURN_YAW_TO_CENTER_AT_END
+   static bool finished = false;
+ #endif
+@@ -310,26 +310,26 @@
+ 
+ int main(int argc, char **argv)
+ {
+-  ros::init(argc, argv, "traj_server");
+-  // ros::NodeHandle node;
+-  ros::NodeHandle nh("~");
+-
+-  ros::Subscriber poly_traj_sub = nh.subscribe("planning/trajectory", 10, polyTrajCallback);
+-  ros::Subscriber heartbeat_sub = nh.subscribe("heartbeat", 10, heartbeatCallback);
+-
+-  pos_cmd_pub = nh.advertise<quadrotor_msgs::PositionCommand>("/position_cmd", 50);
+-
+-  ros::Timer cmd_timer = nh.createTimer(ros::Duration(0.01), cmdCallback);
++  ego_ros2::init(argc, argv, "traj_server");
++  // ego_ros2::NodeHandle node;
++  ego_ros2::NodeHandle nh("~");
++
++  ego_ros2::Subscriber poly_traj_sub = nh.subscribe("planning/trajectory", 10, polyTrajCallback);
++  ego_ros2::Subscriber heartbeat_sub = nh.subscribe("heartbeat", 10, heartbeatCallback);
++
++  pos_cmd_pub = nh.advertise<quadrotor_msgs::msg::PositionCommand>("/position_cmd", 50);
++
++  ego_ros2::Timer cmd_timer = nh.createTimer(ego_ros2::Duration(0.01), cmdCallback);
+ 
+   nh.param("traj_server/time_forward", time_forward_, -1.0);
+   last_yaw_ = 0.0;
+   last_yawdot_ = 0.0;
+ 
+-  ros::Duration(1.0).sleep();
++  ego_ros2::Duration(1.0).sleep();
+ 
+   ROS_INFO("[Traj server]: ready.");
+ 
+-  ros::spin();
++  ego_ros2::spin();
+ 
+   return 0;
+ }
+--- a/swarm-playground/main_ws/src/planner/traj_opt/CMakeLists.txt
++++ b/swarm-playground/main_ws/src/planner/traj_opt/CMakeLists.txt
+@@ -1,43 +1,29 @@
+-cmake_minimum_required(VERSION 2.8.3)
++cmake_minimum_required(VERSION 3.16)
+ project(traj_opt)
+-
+-set(CMAKE_BUILD_TYPE "Release")
+-ADD_COMPILE_OPTIONS(-std=c++11 )
+-ADD_COMPILE_OPTIONS(-std=c++14 )
+-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
+-
++set(CMAKE_CXX_STANDARD 17)
++find_package(ament_cmake REQUIRED)
+ find_package(Eigen3 REQUIRED)
+-find_package(PCL 1.7 REQUIRED)
+-
+-find_package(catkin REQUIRED COMPONENTS
+-  roscpp
+-  rospy
+-  std_msgs
+-  visualization_msgs
+-  plan_env
+-  cv_bridge
+-  traj_utils
+-  path_searching
+-)
+-
+-catkin_package(
+- INCLUDE_DIRS include
+- LIBRARIES traj_opt
+- CATKIN_DEPENDS plan_env 
+-#  DEPENDS system_lib
+-)
+-
+-include_directories( 
+-    SYSTEM 
+-    include 
+-    ${catkin_INCLUDE_DIRS}
+-    ${Eigen3_INCLUDE_DIRS} 
+-    ${PCL_INCLUDE_DIRS}
+-)
+-
+-add_library( traj_opt 
+-    src/poly_traj_optimizer.cpp 
+-    )
+-target_link_libraries( traj_opt
+-    ${catkin_LIBRARIES} 
+-    )  
++find_package(PCL REQUIRED COMPONENTS common)
++find_package(OpenCV REQUIRED)
++find_package(rclcpp REQUIRED)
++find_package(std_msgs REQUIRED)
++find_package(sensor_msgs REQUIRED)
++find_package(geometry_msgs REQUIRED)
++find_package(nav_msgs REQUIRED)
++find_package(visualization_msgs REQUIRED)
++find_package(cv_bridge REQUIRED)
++find_package(pcl_conversions REQUIRED)
++find_package(ego_ros2 REQUIRED)
++find_package(plan_env REQUIRED)
++find_package(path_searching REQUIRED)
++find_package(traj_utils REQUIRED)
++add_library(traj_opt_lib SHARED src/poly_traj_optimizer.cpp)
++target_include_directories(traj_opt_lib PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include> ${PCL_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
++target_link_libraries(traj_opt_lib Eigen3::Eigen ${PCL_LIBRARIES} ${OpenCV_LIBRARIES})
++ament_target_dependencies(traj_opt_lib rclcpp std_msgs sensor_msgs geometry_msgs nav_msgs visualization_msgs cv_bridge pcl_conversions ego_ros2 plan_env path_searching traj_utils)
++install(TARGETS traj_opt_lib DESTINATION lib)
++install(DIRECTORY include/ DESTINATION include)
++ament_export_libraries(traj_opt_lib)
++ament_export_include_directories(include)
++ament_export_dependencies(rclcpp std_msgs sensor_msgs geometry_msgs nav_msgs visualization_msgs cv_bridge pcl_conversions ego_ros2 plan_env path_searching traj_utils)
++ament_package()
+--- a/swarm-playground/main_ws/src/planner/traj_opt/include/optimizer/poly_traj_optimizer.h
++++ b/swarm-playground/main_ws/src/planner/traj_opt/include/optimizer/poly_traj_optimizer.h
+@@ -4,7 +4,7 @@
+ #include <Eigen/Eigen>
+ #include <path_searching/dyn_a_star.h>
+ #include <plan_env/grid_map.h>
+-#include <ros/ros.h>
++#include <ego_ros2/runtime.hpp>
+ #include "optimizer/lbfgs.hpp"
+ #include <traj_utils/plan_container.hpp>
+ #include "poly_traj_utils.hpp"
+@@ -115,7 +115,8 @@
+     };
+ 
+     /* set variables */
+-    void setParam(ros::NodeHandle &nh);
++    void setVelocityLimit(double value) { max_vel_ = value; }
++    void setParam(ego_ros2::NodeHandle &nh);
+     void setEnvironment(const GridMap::Ptr &map);
+     void setControlPoints(const Eigen::MatrixXd &points);
+     void setSwarmTrajs(SwarmTrajData *swarm_trajs_ptr);
+--- a/swarm-playground/main_ws/src/planner/traj_opt/package.xml
++++ b/swarm-playground/main_ws/src/planner/traj_opt/package.xml
+@@ -1,77 +1 @@
+-<?xml version="1.0"?>
+-<package format="2">
+-  <name>traj_opt</name>
+-  <version>0.0.0</version>
+-  <description>The traj_opt package</description>
+-
+-  <!-- One maintainer tag required, multiple allowed, one person per tag -->
+-  <!-- Example:  -->
+-  <!-- <maintainer email="jane.doe@example.com">Jane Doe</maintainer> -->
+-  <maintainer email="iszhouxin@zju.edu.cn">iszhouxin</maintainer>
+-
+-
+-  <!-- One license tag required, multiple allowed, one license per tag -->
+-  <!-- Commonly used license strings: -->
+-  <!--   BSD, MIT, Boost Software License, GPLv2, GPLv3, LGPLv2.1, LGPLv3 -->
+-  <license>TODO</license>
+-
+-
+-  <!-- Url tags are optional, but multiple are allowed, one per tag -->
+-  <!-- Optional attribute type can be: website, bugtracker, or repository -->
+-  <!-- Example: -->
+-  <!-- <url type="website">http://wiki.ros.org/bspline_opt</url> -->
+-
+-
+-  <!-- Author tags are optional, multiple are allowed, one per tag -->
+-  <!-- Authors do not have to be maintainers, but could be -->
+-  <!-- Example: -->
+-  <!-- <author email="jane.doe@example.com">Jane Doe</author> -->
+-
+-
+-  <!-- The *depend tags are used to specify dependencies -->
+-  <!-- Dependencies can be catkin packages or system dependencies -->
+-  <!-- Examples: -->
+-  <!-- Use depend as a shortcut for packages that are both build and exec dependencies -->
+-  <!--   <depend>roscpp</depend> -->
+-  <!--   Note that this is equivalent to the following: -->
+-  <!--   <build_depend>roscpp</build_depend> -->
+-  <!--   <exec_depend>roscpp</exec_depend> -->
+-  <!-- Use build_depend for packages you need at compile time: -->
+-  <!--   <build_depend>message_generation</build_depend> -->
+-  <!-- Use build_export_depend for packages you need in order to build against this package: -->
+-  <!--   <build_export_depend>message_generation</build_export_depend> -->
+-  <!-- Use buildtool_depend for build tool packages: -->
+-  <!--   <buildtool_depend>catkin</buildtool_depend> -->
+-  <!-- Use exec_depend for packages you need at runtime: -->
+-  <!--   <exec_depend>message_runtime</exec_depend> -->
+-  <!-- Use test_depend for packages you need only for testing: -->
+-  <!--   <test_depend>gtest</test_depend> -->
+-  <!-- Use doc_depend for packages you need only for building documentation: -->
+-  <!--   <doc_depend>doxygen</doc_depend> -->
+-  <buildtool_depend>catkin</buildtool_depend>
+-  <build_depend>roscpp</build_depend>
+-  <build_depend>rospy</build_depend>
+-  <build_depend>std_msgs</build_depend>
+-  <build_depend>plan_env</build_depend>
+-  <build_depend>path_searching</build_depend>
+-  <build_depend>traj_utils</build_depend>
+-  <build_export_depend>roscpp</build_export_depend>
+-  <build_export_depend>rospy</build_export_depend>
+-  <build_export_depend>std_msgs</build_export_depend>
+-  <build_export_depend>plan_env</build_export_depend>
+-  <build_export_depend>path_searching</build_export_depend>
+-  <build_export_depend>traj_utils</build_export_depend>
+-  <exec_depend>roscpp</exec_depend>
+-  <exec_depend>rospy</exec_depend>
+-  <exec_depend>std_msgs</exec_depend>
+-  <exec_depend>plan_env</exec_depend>
+-  <exec_depend>path_searching</exec_depend>
+-  <exec_depend>traj_utils</exec_depend>
+-
+-
+-  <!-- The export tag contains other, unspecified, tags -->
+-  <export>
+-    <!-- Other tools can request additional information be placed here -->
+-
+-  </export>
+-</package>
++<package format="3"><name>traj_opt</name><version>0.1.0</version><description>ROS 2 port of pinned EGO-v2 traj_opt</description><maintainer email="ake@example.com">ake</maintainer><license>GPL-3.0</license><buildtool_depend>ament_cmake</buildtool_depend><depend>rclcpp</depend><depend>std_msgs</depend><depend>sensor_msgs</depend><depend>geometry_msgs</depend><depend>nav_msgs</depend><depend>visualization_msgs</depend><depend>cv_bridge</depend><depend>pcl_conversions</depend><depend>ego_ros2</depend><depend>plan_env</depend><depend>path_searching</depend><depend>traj_utils</depend><export><build_type>ament_cmake</build_type></export></package>
+--- a/swarm-playground/main_ws/src/planner/traj_opt/src/poly_traj_optimizer.cpp
++++ b/swarm-playground/main_ws/src/planner/traj_opt/src/poly_traj_optimizer.cpp
+@@ -22,14 +22,14 @@
+     }
+ 
+     // Preparision 1: Some mise params
+-    ros::Time t0 = ros::Time::now(), t1, t2;
++    ego_ros2::Time t0 = ego_ros2::Time::now(), t1, t2;
+     int restart_nums = 0, rebound_times = 0;
+     bool flag_force_return, flag_still_unsafe, flag_success, flag_swarm_too_close;
+     multitopology_data_.initial_obstacles_avoided = false;
+     wei_swarm_mod_ = wei_swarm_;
+ 
+     // Preparision 2: Trajectory related params
+-    t_now_ = ros::Time::now().toSec();
++    t_now_ = ego_ros2::Time::now().toSec();
+     piece_num_ = initT.size();
+     jerkOpt_.reset(iniState, finState, piece_num_);
+     variable_num_ = 4 * (piece_num_ - 1) + 1;
+@@ -59,7 +59,7 @@
+       flag_swarm_too_close = false;
+ 
+       /* ---------- optimize ---------- */
+-      t1 = ros::Time::now();
++      t1 = ego_ros2::Time::now();
+       int result = lbfgs::lbfgs_optimize(
+           variable_num_,
+           x_init,
+@@ -70,7 +70,7 @@
+           this,
+           &lbfgs_params);
+ 
+-      t2 = ros::Time::now();
++      t2 = ego_ros2::Time::now();
+       double time_ms = (t2 - t1).toSec() * 1000;
+       double total_time_ms = (t2 - t0).toSec() * 1000;
+ 
+@@ -1613,7 +1613,7 @@
+   }
+ 
+   /* helper functions */
+-  void PolyTrajOptimizer::setParam(ros::NodeHandle &nh)
++  void PolyTrajOptimizer::setParam(ego_ros2::NodeHandle &nh)
+   {
+     nh.param("optimization/constraint_points_perPiece", cps_num_prePiece_, -1);
+     nh.param("optimization/weight_obstacle", wei_obs_, -1.0);
+--- a/swarm-playground/main_ws/src/planner/traj_utils/CMakeLists.txt
++++ b/swarm-playground/main_ws/src/planner/traj_utils/CMakeLists.txt
+@@ -1,55 +1,32 @@
+-cmake_minimum_required(VERSION 2.8.3)
++cmake_minimum_required(VERSION 3.16)
+ project(traj_utils)
+-
+-set(CMAKE_BUILD_TYPE "Release")
+-set(CMAKE_CXX_FLAGS "-std=c++11")
+-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
+-# set(ENABLE_PRECOMPILED_HEADERS "OFF")
+-
+-find_package(catkin REQUIRED COMPONENTS
+-  roscpp
+-  std_msgs
+-  geometry_msgs
+-  message_generation
+-)
+-
++set(CMAKE_CXX_STANDARD 17)
++find_package(ament_cmake REQUIRED)
+ find_package(Eigen3 REQUIRED)
+-# find_package(PCL 1.7 REQUIRED) #to help find Eigen
+-
+-# Generate messages in the 'msg' folder
+-add_message_files(
+-  FILES
+-  DataDisp.msg
+-  PolyTraj.msg
+-  MINCOTraj.msg
+-  )
+-  
+-# Generate added messages and services with any dependencies listed here
+-generate_messages(
+-  DEPENDENCIES
+-  std_msgs
+-  geometry_msgs
+-)
+-
+-catkin_package(
+- INCLUDE_DIRS include
+- LIBRARIES traj_utils 
+- CATKIN_DEPENDS message_runtime
+-#  DEPENDS system_lib
+-)
+-
+-include_directories( 
+-    SYSTEM 
+-    include 
+-    ${catkin_INCLUDE_DIRS}
+-    ${Eigen3_INCLUDE_DIRS} 
+-)
+-
+-# link_directories(${PCL_LIBRARY_DIRS})
+-
+-add_library( traj_utils
+-    src/planning_visualization.cpp 
+-    )
+-target_link_libraries( traj_utils
+-    ${catkin_LIBRARIES} 
+-    )  
++find_package(PCL REQUIRED COMPONENTS common)
++find_package(OpenCV REQUIRED)
++find_package(rclcpp REQUIRED)
++find_package(std_msgs REQUIRED)
++find_package(sensor_msgs REQUIRED)
++find_package(geometry_msgs REQUIRED)
++find_package(nav_msgs REQUIRED)
++find_package(visualization_msgs REQUIRED)
++find_package(cv_bridge REQUIRED)
++find_package(pcl_conversions REQUIRED)
++find_package(ego_ros2 REQUIRED)
++find_package(rosidl_default_generators REQUIRED)
++find_package(builtin_interfaces REQUIRED)
++rosidl_generate_interfaces(${PROJECT_NAME} "msg/DataDisp.msg" "msg/PolyTraj.msg" "msg/MINCOTraj.msg" DEPENDENCIES std_msgs geometry_msgs builtin_interfaces)
++add_library(traj_utils_lib SHARED src/planning_visualization.cpp)
++target_include_directories(traj_utils_lib PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include> ${PCL_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
++target_link_libraries(traj_utils_lib Eigen3::Eigen ${PCL_LIBRARIES} ${OpenCV_LIBRARIES})
++ament_target_dependencies(traj_utils_lib rclcpp std_msgs sensor_msgs geometry_msgs nav_msgs visualization_msgs cv_bridge pcl_conversions ego_ros2)
++rosidl_get_typesupport_target(typesupport ${PROJECT_NAME} rosidl_typesupport_cpp)
++target_link_libraries(traj_utils_lib "${typesupport}")
++ament_export_dependencies(rosidl_default_runtime)
++install(TARGETS traj_utils_lib DESTINATION lib)
++install(DIRECTORY include/traj_utils/ DESTINATION include/traj_utils/traj_utils)
++ament_export_libraries(traj_utils_lib)
++ament_export_include_directories(include)
++ament_export_dependencies(rclcpp std_msgs sensor_msgs geometry_msgs nav_msgs visualization_msgs cv_bridge pcl_conversions ego_ros2)
++ament_package()
+--- a/swarm-playground/main_ws/src/planner/traj_utils/include/traj_utils/plan_container.hpp
++++ b/swarm-playground/main_ws/src/planner/traj_utils/include/traj_utils/plan_container.hpp
+@@ -3,7 +3,7 @@
+ 
+ #include <Eigen/Eigen>
+ #include <vector>
+-#include <ros/ros.h>
++#include <ego_ros2/runtime.hpp>
+ 
+ #include <optimizer/poly_traj_utils.hpp>
+ 
+--- a/swarm-playground/main_ws/src/planner/traj_utils/include/traj_utils/planning_visualization.h
++++ b/swarm-playground/main_ws/src/planner/traj_utils/include/traj_utils/planning_visualization.h
+@@ -4,10 +4,10 @@
+ #include <eigen3/Eigen/Eigen>
+ #include <algorithm>
+ #include <iostream>
+-#include <ros/ros.h>
++#include <ego_ros2/runtime.hpp>
+ #include <vector>
+-#include <visualization_msgs/Marker.h>
+-#include <visualization_msgs/MarkerArray.h>
++#include <visualization_msgs/msg/marker.hpp>
++#include <visualization_msgs/msg/marker_array.hpp>
+ #include <stdlib.h>
+ 
+ using std::vector;
+@@ -16,37 +16,37 @@
+   class PlanningVisualization
+   {
+   private:
+-    ros::NodeHandle node;
++    ego_ros2::NodeHandle node;
+ 
+-    ros::Publisher goal_point_pub;
+-    ros::Publisher global_list_pub;
+-    ros::Publisher init_list_pub;
+-    ros::Publisher optimal_list_pub;
+-    ros::Publisher failed_list_pub;
+-    ros::Publisher a_star_list_pub;
+-    ros::Publisher guide_vector_pub;
++    ego_ros2::Publisher goal_point_pub;
++    ego_ros2::Publisher global_list_pub;
++    ego_ros2::Publisher init_list_pub;
++    ego_ros2::Publisher optimal_list_pub;
++    ego_ros2::Publisher failed_list_pub;
++    ego_ros2::Publisher a_star_list_pub;
++    ego_ros2::Publisher guide_vector_pub;
+ 
+-    ros::Publisher intermediate_pt0_pub;
+-    ros::Publisher intermediate_pt1_pub;
+-    ros::Publisher intermediate_grad0_pub;
+-    ros::Publisher intermediate_grad1_pub;
+-    ros::Publisher intermediate_grad_smoo_pub;
+-    ros::Publisher intermediate_grad_dist_pub;
+-    ros::Publisher intermediate_grad_feas_pub;
+-    ros::Publisher intermediate_grad_swarm_pub;
++    ego_ros2::Publisher intermediate_pt0_pub;
++    ego_ros2::Publisher intermediate_pt1_pub;
++    ego_ros2::Publisher intermediate_grad0_pub;
++    ego_ros2::Publisher intermediate_grad1_pub;
++    ego_ros2::Publisher intermediate_grad_smoo_pub;
++    ego_ros2::Publisher intermediate_grad_dist_pub;
++    ego_ros2::Publisher intermediate_grad_feas_pub;
++    ego_ros2::Publisher intermediate_grad_swarm_pub;
+ 
+   public:
+     PlanningVisualization(/* args */) {}
+     ~PlanningVisualization() {}
+-    PlanningVisualization(ros::NodeHandle &nh);
++    PlanningVisualization(ego_ros2::NodeHandle &nh);
+ 
+     typedef std::shared_ptr<PlanningVisualization> Ptr;
+ 
+-    void displayMarkerList(ros::Publisher &pub, const vector<Eigen::Vector3d> &list, double scale,
++    void displayMarkerList(ego_ros2::Publisher &pub, const vector<Eigen::Vector3d> &list, double scale,
+                            Eigen::Vector4d color, int id,  bool show_sphere = true);
+-    void generatePathDisplayArray(visualization_msgs::MarkerArray &array,
++    void generatePathDisplayArray(visualization_msgs::msg::MarkerArray &array,
+                                   const vector<Eigen::Vector3d> &list, double scale, Eigen::Vector4d color, int id);
+-    void generateArrowDisplayArray(visualization_msgs::MarkerArray &array,
++    void generateArrowDisplayArray(visualization_msgs::msg::MarkerArray &array,
+                                    const vector<Eigen::Vector3d> &list, double scale, Eigen::Vector4d color, int id);
+     void displayGoalPoint(Eigen::Vector3d goal_point, Eigen::Vector4d color, const double scale, int id);
+     void displayGlobalPathList(vector<Eigen::Vector3d> global_pts, const double scale, int id);
+@@ -56,11 +56,11 @@
+     void displayOptimalList(Eigen::MatrixXd optimal_pts, int id);
+     void displayFailedList(Eigen::MatrixXd failed_pts, int id);
+     void displayAStarList(std::vector<std::vector<Eigen::Vector3d>> a_star_paths, int id);
+-    void displayArrowList(ros::Publisher &pub, const vector<Eigen::Vector3d> &list, double scale, Eigen::Vector4d color, int id);
++    void displayArrowList(ego_ros2::Publisher &pub, const vector<Eigen::Vector3d> &list, double scale, Eigen::Vector4d color, int id);
+     
+     void displayIntermediatePt(std::string type, Eigen::MatrixXd &pts, int id, Eigen::Vector4d color);
+     void displayIntermediateGrad(std::string type, Eigen::MatrixXd &pts, Eigen::MatrixXd &grad, int id, Eigen::Vector4d color);
+-    // void displayNewArrow(ros::Publisher& guide_vector_pub, ego_planner::PolyTrajOptimizer::Ptr optimizer);
++    // void displayNewArrow(ego_ros2::Publisher& guide_vector_pub, ego_planner::PolyTrajOptimizer::Ptr optimizer);
+   };
+ } // namespace ego_planner
+ #endif
+--- a/swarm-playground/main_ws/src/planner/traj_utils/msg/DataDisp.msg
++++ b/swarm-playground/main_ws/src/planner/traj_utils/msg/DataDisp.msg
+@@ -1,4 +1,4 @@
+-Header header
++std_msgs/Header header
+ 
+ float64 a
+ float64 b
+--- a/swarm-playground/main_ws/src/planner/traj_utils/msg/MINCOTraj.msg
++++ b/swarm-playground/main_ws/src/planner/traj_utils/msg/MINCOTraj.msg
+@@ -1,6 +1,6 @@
+ int16 drone_id
+ int32 traj_id
+-time start_time
++builtin_interfaces/Time start_time
+ float32 des_clearance
+ 
+ uint8 order
+--- a/swarm-playground/main_ws/src/planner/traj_utils/msg/PolyTraj.msg
++++ b/swarm-playground/main_ws/src/planner/traj_utils/msg/PolyTraj.msg
+@@ -1,6 +1,6 @@
+ int16 drone_id
+ int32 traj_id
+-time start_time
++builtin_interfaces/Time start_time
+ 
+ uint8 order
+ float32[] coef_x
+--- a/swarm-playground/main_ws/src/planner/traj_utils/package.xml
++++ b/swarm-playground/main_ws/src/planner/traj_utils/package.xml
+@@ -1,70 +1 @@
+-<?xml version="1.0"?>
+-<package format="2">
+-  <name>traj_utils</name>
+-  <version>0.0.0</version>
+-  <description>The traj_utils package</description>
+-
+-  <!-- One maintainer tag required, multiple allowed, one person per tag -->
+-  <!-- Example:  -->
+-  <!-- <maintainer email="jane.doe@example.com">Jane Doe</maintainer> -->
+-  <maintainer email="bzhouai@todo.todo">bzhouai</maintainer>
+-
+-
+-  <!-- One license tag required, multiple allowed, one license per tag -->
+-  <!-- Commonly used license strings: -->
+-  <!--   BSD, MIT, Boost Software License, GPLv2, GPLv3, LGPLv2.1, LGPLv3 -->
+-  <license>TODO</license>
+-
+-
+-  <!-- Url tags are optional, but multiple are allowed, one per tag -->
+-  <!-- Optional attribute type can be: website, bugtracker, or repository -->
+-  <!-- Example: -->
+-  <!-- <url type="website">http://wiki.ros.org/traj_utils</url> -->
+-
+-
+-  <!-- Author tags are optional, multiple are allowed, one per tag -->
+-  <!-- Authors do not have to be maintainers, but could be -->
+-  <!-- Example: -->
+-  <!-- <author email="jane.doe@example.com">Jane Doe</author> -->
+-
+-
+-  <!-- The *depend tags are used to specify dependencies -->
+-  <!-- Dependencies can be catkin packages or system dependencies -->
+-  <!-- Examples: -->
+-  <!-- Use depend as a shortcut for packages that are both build and exec dependencies -->
+-  <!--   <depend>roscpp</depend> -->
+-  <!--   Note that this is equivalent to the following: -->
+-  <!--   <build_depend>roscpp</build_depend> -->
+-  <!--   <exec_depend>roscpp</exec_depend> -->
+-  <!-- Use build_depend for packages you need at compile time: -->
+-  <!--   <build_depend>message_generation</build_depend> -->
+-  <!-- Use build_export_depend for packages you need in order to build against this package: -->
+-  <!--   <build_export_depend>message_generation</build_export_depend> -->
+-  <!-- Use buildtool_depend for build tool packages: -->
+-  <!--   <buildtool_depend>catkin</buildtool_depend> -->
+-  <!-- Use exec_depend for packages you need at runtime: -->
+-  <!--   <exec_depend>message_runtime</exec_depend> -->
+-  <!-- Use test_depend for packages you need only for testing: -->
+-  <!--   <test_depend>gtest</test_depend> -->
+-  <!-- Use doc_depend for packages you need only for building documentation: -->
+-  <!--   <doc_depend>doxygen</doc_depend> -->
+-  <buildtool_depend>catkin</buildtool_depend>
+-  <build_depend>roscpp</build_depend>
+-  <build_depend>std_msgs</build_depend>
+-  <build_depend>message_generation</build_depend>
+-
+-  <build_export_depend>catkin</build_export_depend>
+-  <build_export_depend>std_msgs</build_export_depend>
+-
+-  <exec_depend>catkin</exec_depend>
+-  <exec_depend>roscpp</exec_depend>
+-  <exec_depend>std_msgs</exec_depend>
+-  <exec_depend>message_runtime</exec_depend>
+-
+-
+-  <!-- The export tag contains other, unspecified, tags -->
+-  <export>
+-    <!-- Other tools can request additional information be placed here -->
+-
+-  </export>
+-</package>
++<package format="3"><name>traj_utils</name><version>0.1.0</version><description>ROS 2 port of pinned EGO-v2 traj_utils</description><maintainer email="ake@example.com">ake</maintainer><license>GPL-3.0</license><buildtool_depend>ament_cmake</buildtool_depend><depend>rclcpp</depend><depend>std_msgs</depend><depend>sensor_msgs</depend><depend>geometry_msgs</depend><depend>nav_msgs</depend><depend>visualization_msgs</depend><depend>cv_bridge</depend><depend>pcl_conversions</depend><depend>ego_ros2</depend><buildtool_depend>rosidl_default_generators</buildtool_depend><exec_depend>rosidl_default_runtime</exec_depend><member_of_group>rosidl_interface_packages</member_of_group><export><build_type>ament_cmake</build_type></export></package>
+--- a/swarm-playground/main_ws/src/planner/traj_utils/src/planning_visualization.cpp
++++ b/swarm-playground/main_ws/src/planner/traj_utils/src/planning_visualization.cpp
+@@ -4,37 +4,37 @@
+ using std::endl;
+ namespace ego_planner
+ {
+-  PlanningVisualization::PlanningVisualization(ros::NodeHandle &nh)
++  PlanningVisualization::PlanningVisualization(ego_ros2::NodeHandle &nh)
+   {
+     node = nh;
+ 
+-    goal_point_pub = nh.advertise<visualization_msgs::Marker>("goal_point", 2);
+-    global_list_pub = nh.advertise<visualization_msgs::Marker>("global_list", 2);
+-    init_list_pub = nh.advertise<visualization_msgs::Marker>("init_list", 2);
+-    optimal_list_pub = nh.advertise<visualization_msgs::Marker>("optimal_list", 2);
+-    failed_list_pub = nh.advertise<visualization_msgs::Marker>("failed_list", 2);
+-    a_star_list_pub = nh.advertise<visualization_msgs::Marker>("a_star_list", 20);
+-
+-    // intermediate_pt0_pub = nh.advertise<visualization_msgs::Marker>("pt0_dur_opt", 10);
+-    // intermediate_grad0_pub = nh.advertise<visualization_msgs::MarkerArray>("grad0_dur_opt", 10);
+-    // intermediate_pt1_pub = nh.advertise<visualization_msgs::Marker>("pt1_dur_opt", 10);
+-    // intermediate_grad1_pub = nh.advertise<visualization_msgs::MarkerArray>("grad1_dur_opt", 10);
+-    // intermediate_grad_smoo_pub = nh.advertise<visualization_msgs::MarkerArray>("smoo_grad_dur_opt", 10);
+-    // intermediate_grad_dist_pub = nh.advertise<visualization_msgs::MarkerArray>("dist_grad_dur_opt", 10);
+-    // intermediate_grad_feas_pub = nh.advertise<visualization_msgs::MarkerArray>("feas_grad_dur_opt", 10);
+-    // intermediate_grad_swarm_pub = nh.advertise<visualization_msgs::MarkerArray>("swarm_grad_dur_opt", 10);
++    goal_point_pub = nh.advertise<visualization_msgs::msg::Marker>("goal_point", 2);
++    global_list_pub = nh.advertise<visualization_msgs::msg::Marker>("global_list", 2);
++    init_list_pub = nh.advertise<visualization_msgs::msg::Marker>("init_list", 2);
++    optimal_list_pub = nh.advertise<visualization_msgs::msg::Marker>("optimal_list", 2);
++    failed_list_pub = nh.advertise<visualization_msgs::msg::Marker>("failed_list", 2);
++    a_star_list_pub = nh.advertise<visualization_msgs::msg::Marker>("a_star_list", 20);
++
++    // intermediate_pt0_pub = nh.advertise<visualization_msgs::msg::Marker>("pt0_dur_opt", 10);
++    // intermediate_grad0_pub = nh.advertise<visualization_msgs::msg::MarkerArray>("grad0_dur_opt", 10);
++    // intermediate_pt1_pub = nh.advertise<visualization_msgs::msg::Marker>("pt1_dur_opt", 10);
++    // intermediate_grad1_pub = nh.advertise<visualization_msgs::msg::MarkerArray>("grad1_dur_opt", 10);
++    // intermediate_grad_smoo_pub = nh.advertise<visualization_msgs::msg::MarkerArray>("smoo_grad_dur_opt", 10);
++    // intermediate_grad_dist_pub = nh.advertise<visualization_msgs::msg::MarkerArray>("dist_grad_dur_opt", 10);
++    // intermediate_grad_feas_pub = nh.advertise<visualization_msgs::msg::MarkerArray>("feas_grad_dur_opt", 10);
++    // intermediate_grad_swarm_pub = nh.advertise<visualization_msgs::msg::MarkerArray>("swarm_grad_dur_opt", 10);
+   }
+ 
+   // // real ids used: {id, id+1000}
+-  void PlanningVisualization::displayMarkerList(ros::Publisher &pub, const vector<Eigen::Vector3d> &list, double scale,
++  void PlanningVisualization::displayMarkerList(ego_ros2::Publisher &pub, const vector<Eigen::Vector3d> &list, double scale,
+                                                 Eigen::Vector4d color, int id, bool show_sphere /* = true */ )
+   {
+-    visualization_msgs::Marker sphere, line_strip;
++    visualization_msgs::msg::Marker sphere, line_strip;
+     sphere.header.frame_id = line_strip.header.frame_id = "world";
+-    sphere.header.stamp = line_strip.header.stamp = ros::Time::now();
+-    sphere.type = visualization_msgs::Marker::SPHERE_LIST;
+-    line_strip.type = visualization_msgs::Marker::LINE_STRIP;
+-    sphere.action = line_strip.action = visualization_msgs::Marker::ADD;
++    sphere.header.stamp = line_strip.header.stamp = ego_ros2::Time::now();
++    sphere.type = visualization_msgs::msg::Marker::SPHERE_LIST;
++    line_strip.type = visualization_msgs::msg::Marker::LINE_STRIP;
++    sphere.action = line_strip.action = visualization_msgs::msg::Marker::ADD;
+     sphere.id = id;
+     line_strip.id = id + 1000;
+ 
+@@ -47,7 +47,7 @@
+     sphere.scale.y = scale;
+     sphere.scale.z = scale;
+     line_strip.scale.x = scale / 2;
+-    geometry_msgs::Point pt;
++    geometry_msgs::msg::Point pt;
+     for (int i = 0; i < int(list.size()); i++)
+     {
+       pt.x = list[i](0);
+@@ -61,15 +61,15 @@
+   }
+ 
+   // real ids used: {id, id+1}
+-  void PlanningVisualization::generatePathDisplayArray(visualization_msgs::MarkerArray &array,
++  void PlanningVisualization::generatePathDisplayArray(visualization_msgs::msg::MarkerArray &array,
+                                                        const vector<Eigen::Vector3d> &list, double scale, Eigen::Vector4d color, int id)
+   {
+-    visualization_msgs::Marker sphere, line_strip;
++    visualization_msgs::msg::Marker sphere, line_strip;
+     sphere.header.frame_id = line_strip.header.frame_id = "world";
+-    sphere.header.stamp = line_strip.header.stamp = ros::Time::now();
+-    sphere.type = visualization_msgs::Marker::SPHERE_LIST;
+-    line_strip.type = visualization_msgs::Marker::LINE_STRIP;
+-    sphere.action = line_strip.action = visualization_msgs::Marker::ADD;
++    sphere.header.stamp = line_strip.header.stamp = ego_ros2::Time::now();
++    sphere.type = visualization_msgs::msg::Marker::SPHERE_LIST;
++    line_strip.type = visualization_msgs::msg::Marker::LINE_STRIP;
++    sphere.action = line_strip.action = visualization_msgs::msg::Marker::ADD;
+     sphere.id = id;
+     line_strip.id = id + 1;
+ 
+@@ -82,7 +82,7 @@
+     sphere.scale.y = scale;
+     sphere.scale.z = scale;
+     line_strip.scale.x = scale / 3;
+-    geometry_msgs::Point pt;
++    geometry_msgs::msg::Point pt;
+     for (int i = 0; i < int(list.size()); i++)
+     {
+       pt.x = list[i](0);
+@@ -96,16 +96,16 @@
+   }
+ 
+   // real ids used: {1000*id ~ (arrow nums)+1000*id}
+-  void PlanningVisualization::generateArrowDisplayArray(visualization_msgs::MarkerArray &array,
++  void PlanningVisualization::generateArrowDisplayArray(visualization_msgs::msg::MarkerArray &array,
+                                                         const vector<Eigen::Vector3d> &list, double scale, Eigen::Vector4d color, int id)
+   {
+-    visualization_msgs::Marker arrow;
++    visualization_msgs::msg::Marker arrow;
+     arrow.header.frame_id = "world";
+-    arrow.header.stamp = ros::Time::now();
+-    arrow.type = visualization_msgs::Marker::ARROW;
+-    arrow.action = visualization_msgs::Marker::ADD;
+-
+-    // geometry_msgs::Point start, end;
++    arrow.header.stamp = ego_ros2::Time::now();
++    arrow.type = visualization_msgs::msg::Marker::ARROW;
++    arrow.action = visualization_msgs::msg::Marker::ADD;
++
++    // geometry_msgs::msg::Point start, end;
+     // arrow.points
+ 
+     arrow.color.r = color(0);
+@@ -116,7 +116,7 @@
+     arrow.scale.y = 2 * scale;
+     arrow.scale.z = 2 * scale;
+ 
+-    geometry_msgs::Point start, end;
++    geometry_msgs::msg::Point start, end;
+     for (int i = 0; i < int(list.size() / 2); i++)
+     {
+       // arrow.color.r = color(0) / (1+i);
+@@ -140,11 +140,11 @@
+ 
+   void PlanningVisualization::displayGoalPoint(Eigen::Vector3d goal_point, Eigen::Vector4d color, const double scale, int id)
+   {
+-    visualization_msgs::Marker sphere;
++    visualization_msgs::msg::Marker sphere;
+     sphere.header.frame_id = "world";
+-    sphere.header.stamp = ros::Time::now();
+-    sphere.type = visualization_msgs::Marker::SPHERE;
+-    sphere.action = visualization_msgs::Marker::ADD;
++    sphere.header.stamp = ego_ros2::Time::now();
++    sphere.type = visualization_msgs::msg::Marker::SPHERE;
++    sphere.action = visualization_msgs::msg::Marker::ADD;
+     sphere.id = id;
+ 
+     sphere.pose.orientation.w = 1.0;
+@@ -189,7 +189,7 @@
+       Eigen::Vector4d color(0, 0, 0, 0);
+       vector<Eigen::Vector3d> blank;
+       displayMarkerList(init_list_pub, blank, scale, color, id, false);
+-      ros::Duration(0.001).sleep();
++      ego_ros2::Duration(0.001).sleep();
+     }
+     last_nums = 0;
+ 
+@@ -197,7 +197,7 @@
+     {
+       Eigen::Vector4d color(0, 0, 1, 0.7);
+       displayMarkerList(init_list_pub, init_trajs[id], scale, color, id, false);
+-      ros::Duration(0.001).sleep();
++      ego_ros2::Duration(0.001).sleep();
+       last_nums++;
+     }
+ 
+@@ -230,7 +230,7 @@
+       Eigen::Vector4d color(0, 0, 0, 0);
+       vector<Eigen::Vector3d> blank;
+       displayMarkerList(optimal_list_pub, blank, scale, color, id + 10, false);
+-      ros::Duration(0.001).sleep();
++      ego_ros2::Duration(0.001).sleep();
+     }
+     last_nums = 0;
+ 
+@@ -238,7 +238,7 @@
+     {
+       Eigen::Vector4d color(1, 0, 0, 0.7);
+       displayMarkerList(optimal_list_pub, optimal_trajs[id], scale, color, id + 10, false);
+-      ros::Duration(0.001).sleep();
++      ego_ros2::Duration(0.001).sleep();
+       last_nums++;
+     }
+ 
+@@ -307,9 +307,9 @@
+     }
+   }
+ 
+-  void PlanningVisualization::displayArrowList(ros::Publisher &pub, const vector<Eigen::Vector3d> &list, double scale, Eigen::Vector4d color, int id)
+-  {
+-    visualization_msgs::MarkerArray array;
++  void PlanningVisualization::displayArrowList(ego_ros2::Publisher &pub, const vector<Eigen::Vector3d> &list, double scale, Eigen::Vector4d color, int id)
++  {
++    visualization_msgs::msg::MarkerArray array;
+     // clear
+     pub.publish(array);
+ 

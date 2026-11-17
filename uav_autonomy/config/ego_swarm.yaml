@@ -1,0 +1,63 @@
+ego_planner_node:
+  ros__parameters:
+    fsm/thresh_replan_time: 0.5
+    fsm/thresh_no_replan_meter: 0.3
+    fsm/planning_horizen_time: 5.0
+    fsm/emergency_time: 1.0
+    fsm/realworld_experiment: false
+    fsm/fail_safe: true
+    grid_map/resolution: 0.2
+    grid_map/local_update_range_x: 10.0
+    grid_map/local_update_range_y: 10.0
+    grid_map/local_update_range_z: 8.0
+    grid_map/obstacles_inflation: 0.90
+    grid_map/local_map_margin: 3
+    grid_map/ground_height: 0.0
+    grid_map/use_depth_filter: true
+    grid_map/k_depth_scaling_factor: 1000.0
+    grid_map/skip_pixel: 2
+    grid_map/p_hit: 0.65
+    grid_map/p_miss: 0.35
+    grid_map/p_min: 0.12
+    grid_map/p_max: 0.9
+    grid_map/p_occ: 0.8
+    grid_map/max_ray_length: 20.0
+    grid_map/virtual_ceil_height: 6.0
+    grid_map/virtual_floor_height: 3.6
+    grid_map/visualization_truncate_height: 1.8
+    grid_map/show_occ_time: false
+    grid_map/pose_type: 1
+    grid_map/frame_id: odom
+    manager/max_jerk: 1.4
+    # The native seed interval is 1.5 * spacing / requested axis speed.
+    # At the guarded low speed, 0.4 m yields 7.2 s knot spans and repeated
+    # 0.5 s replans barely traverse the acceleration prefix. Keep the native
+    # optimiser and timing; give it a spacing suited to this low-speed demo.
+    manager/control_points_distance: 0.08
+    manager/feasibility_tolerance: 0.05
+    optimization/lambda_smooth: 1.0
+    optimization/lambda_collision: 0.5
+    optimization/lambda_feasibility: 1000.0
+    optimization/lambda_fitness: 1.0
+    optimization/dist0: 0.5
+    optimization/swarm_clearance: 0.5
+    bspline/limit_ratio: 1.1
+    prediction/lambda: 1.0
+    prediction/predict_rate: 1.0
+    use_sim_time: true
+    fsm/flight_type: 1
+    fsm/waypoint_num: 0
+    fsm/planning_horizon: 3.0
+    grid_map/map_size_x: 24.0
+    grid_map/map_size_y: 32.0
+    grid_map/map_size_z: 12.0
+    manager/max_vel: 0.28
+    manager/max_acc: 0.38
+    manager/drone_id: 0
+    manager/planning_horizon: 3.0
+    manager/use_distinctive_trajs: false
+    optimization/max_vel: 0.28
+    optimization/max_acc: 0.38
+    bspline/limit_vel: 0.28
+    bspline/limit_acc: 0.38
+    prediction/obj_num: 0

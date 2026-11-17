@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/PX4/PX4-gazebo-models",
+  "revision": "e05f4312d3f28aa621157610584a4870406cb6d3",
+  "path": "worlds/forest.sdf",
+  "sha256": "e68083acac56d51a19d1b14b3da6d97c8591a3a2d8293241f6e2dc2c45901372",
+  "license": "BSD-3-Clause"
+}

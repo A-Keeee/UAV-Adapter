@@ -1,0 +1,681 @@
+--- a/src/planner/bspline_opt/include/bspline_opt/bspline_optimizer.h
++++ b/src/planner/bspline_opt/include/bspline_opt/bspline_optimizer.h
+@@ -92,6 +92,7 @@
+     /* main API */
+     void setEnvironment(const GridMap::Ptr &map);
+     void setEnvironment(const GridMap::Ptr &map, const fast_planner::ObjPredictor::Ptr mov_obj);
++    void setVelocityLimit(double value) { max_vel_ = value; }
+     void setParam(rclcpp::Node::SharedPtr node);
+     Eigen::MatrixXd BsplineOptimizeTraj(const Eigen::MatrixXd &points, const double &ts,
+                                         const int &cost_function, int max_num_id, int max_time_id);
+@@ -127,6 +128,7 @@
+     inline double getSwarmClearance(void) { return swarm_clearance_; }
+ 
+   private:
++    rclcpp::Node::SharedPtr node_;
+     GridMap::Ptr grid_map_;
+     fast_planner::ObjPredictor::Ptr moving_objs_;
+     SwarmTrajData *swarm_trajs_{NULL}; // Can not use shared_ptr and no need to free
+--- a/src/planner/bspline_opt/src/bspline_optimizer.cpp
++++ b/src/planner/bspline_opt/src/bspline_optimizer.cpp
+@@ -7,6 +7,7 @@
+ 
+   void BsplineOptimizer::setParam(rclcpp::Node::SharedPtr node)
+   {
++    node_=node;
+ 
+     node->declare_parameter("optimization/lambda_smooth", -1.0);
+     node->declare_parameter("optimization/lambda_collision", -1.0);
+@@ -876,7 +877,7 @@
+     cost = 0.0;
+     int end_idx = q.cols() - order_ - (double)(q.cols() - 2 * order_) * 1.0 / 3.0; // Only check the first 2/3 points
+     const double CLEARANCE = swarm_clearance_ * 2;
+-    double t_now = rclcpp::Clock().now().seconds();
++    double t_now = node_->now().seconds();
+     constexpr double a = 2.0, b = 1.0, inv_a2 = 1 / a / a, inv_b2 = 1 / b / b;
+ 
+     for (int i = order_; i < end_idx; i++)
+@@ -929,7 +930,7 @@
+     cost = 0.0;
+     int end_idx = q.cols() - order_;
+     constexpr double CLEARANCE = 1.5;
+-    double t_now = rclcpp::Clock().now().seconds();
++    double t_now = node_->now().seconds();
+ 
+     for (int i = order_; i < end_idx; i++)
+     {
+@@ -1547,7 +1548,7 @@
+     // 变量个数
+     variable_num_ = 3 * (end_id - start_id);
+ 
+-    rclcpp::Time t0 = rclcpp::Clock().now(), t1, t2;
++    rclcpp::Time t0 = node_->now(), t1, t2;
+     int restart_nums = 0, rebound_times = 0;
+     ;
+     bool flag_force_return, flag_occ, success;
+@@ -1575,10 +1576,10 @@
+       lbfgs_params.g_epsilon = 0.01;
+ 
+       /* ---------- optimize ---------- */
+-      t1 = rclcpp::Clock().now();
++      t1 = node_->now();
+       // 执行优化
+       int result = lbfgs::lbfgs_optimize(variable_num_, q, &final_cost, BsplineOptimizer::costFunctionRebound, NULL, BsplineOptimizer::earlyExit, this, &lbfgs_params);
+-      t2 = rclcpp::Clock().now();
++      t2 = node_->now();
+       double time_ms = (t2 - t1).seconds() * 1000;
+       double total_time_ms = (t2 - t0).seconds() * 1000;
+ 
+@@ -1845,7 +1846,7 @@
+     Eigen::MatrixXd g_fitness = Eigen::MatrixXd::Zero(3, cps_.points.cols());
+     Eigen::MatrixXd g_feasibility = Eigen::MatrixXd::Zero(3, cps_.points.cols());
+ 
+-    // time_satrt = rclcpp::Clock().now();
++    // time_satrt = node_->now();
+ 
+     calcSmoothnessCost(cps_.points, f_smoothness, g_smoothness);
+     calcFitnessCost(cps_.points, f_fitness, g_fitness);
+--- a/src/planner/bspline_opt/src/uniform_bspline.cpp
++++ b/src/planner/bspline_opt/src/uniform_bspline.cpp
+@@ -196,6 +196,18 @@
+   {
+     int num1 = 5;
+     int num2 = getKnot().rows() - 1 - 5;
++
++    // Short local plans may have no interior knots after preserving the
++    // endpoint padding. The original interval then has zero/negative length.
++    // Retiming all knots preserves the curve geometry; the caller restores
++    // measured endpoint derivatives with its existing parameterisation.
++    if (num2 <= num1)
++    {
++      double anchor = u_(p_);
++      u_ = ((u_.array() - anchor) * ratio + anchor).matrix();
++      interval_ *= ratio;
++      return;
++    }
+ 
+     double delta_t = (ratio - 1.0) * (u_(num2) - u_(num1));
+     double t_inc = delta_t / double(num2 - num1);
+--- a/src/planner/plan_env/include/plan_env/grid_map.h
++++ b/src/planner/plan_env/include/plan_env/grid_map.h
+@@ -82,7 +82,7 @@
+   int local_map_margin_;
+ 
+   /* visualization and computation time display */
+-  double visualization_truncate_height_, virtual_ceil_height_, ground_height_, virtual_ceil_yp_, virtual_ceil_yn_;
++  double visualization_truncate_height_, virtual_ceil_height_, virtual_floor_height_, ground_height_, virtual_ceil_yp_, virtual_ceil_yn_;
+   bool show_occ_time_;
+ 
+   /* active mapping */
+@@ -191,6 +191,9 @@
+   bool odomValid();
+   void getRegion(Eigen::Vector3d &ori, Eigen::Vector3d &size);
+   inline double getResolution();
++  std::pair<size_t,size_t> mapBufferCapacity() const {
++    return {md_.occupancy_buffer_.size(), md_.occupancy_buffer_inflate_.size()};
++  }
+   Eigen::Vector3d getOrigin();
+   int getVoxelNum();
+   bool getOdomDepthTimeout() { return md_.flag_depth_odom_timeout_; }
+@@ -442,8 +445,11 @@
+     for (int y = -step; y <= step; ++y)
+       for (int z = -step; z <= step; ++z)
+       {
++        const double radius = mp_.obstacles_inflation_ + .866025403784 * mp_.resolution_;
++        if ((x*x+y*y+z*z)*mp_.resolution_*mp_.resolution_ > radius*radius) continue;
+         pts[num++] = Eigen::Vector3i(pt(0) + x, pt(1) + y, pt(2) + z);
+       }
++  pts.resize(num);
+ }
+ 
+ inline double GridMap::getResolution() { return mp_.resolution_; }
+--- a/src/planner/plan_env/src/grid_map.cpp
++++ b/src/planner/plan_env/src/grid_map.cpp
+@@ -37,6 +37,7 @@
+   node_->declare_parameter("grid_map/max_ray_length", -0.1);
+   node_->declare_parameter("grid_map/visualization_truncate_height", -0.1);
+   node_->declare_parameter("grid_map/virtual_ceil_height", -0.1);
++  node_->declare_parameter("grid_map/virtual_floor_height", -1.0);
+   node_->declare_parameter("grid_map/virtual_ceil_yp", -0.1);
+   node_->declare_parameter("grid_map/virtual_ceil_yn", -0.1);
+   node_->declare_parameter("grid_map/show_occ_time", false);
+@@ -74,6 +75,7 @@
+   node_->get_parameter("grid_map/max_ray_length", mp_.max_ray_length_);
+   node_->get_parameter("grid_map/visualization_truncate_height", mp_.visualization_truncate_height_);
+   node_->get_parameter("grid_map/virtual_ceil_height", mp_.virtual_ceil_height_);
++  node_->get_parameter("grid_map/virtual_floor_height", mp_.virtual_floor_height_);
+   node_->get_parameter("grid_map/virtual_ceil_yp", mp_.virtual_ceil_yp_);
+   node_->get_parameter("grid_map/virtual_ceil_yn", mp_.virtual_ceil_yn_);
+   node_->get_parameter("grid_map/show_occ_time", mp_.show_occ_time_);
+@@ -166,10 +168,10 @@
+ 
+   // 使用独立的里程计和点云订阅
+   indep_cloud_sub_ = node_->create_subscription<sensor_msgs::msg::PointCloud2>(
+-      "grid_map/cloud", 10, std::bind(&GridMap::cloudCallback, this, std::placeholders::_1));
++      "grid_map/cloud", rclcpp::SensorDataQoS(), std::bind(&GridMap::cloudCallback, this, std::placeholders::_1));
+ 
+   indep_odom_sub_ = node_->create_subscription<nav_msgs::msg::Odometry>(
+-      "grid_map/odom", 10, std::bind(&GridMap::odomCallback, this, std::placeholders::_1));
++      "grid_map/odom", rclcpp::SensorDataQoS(), std::bind(&GridMap::odomCallback, this, std::placeholders::_1));
+ 
+   // 定时器
+   occ_timer_ = node_->create_wall_timer(
+@@ -190,7 +192,7 @@
+   md_.has_odom_ = false;
+   md_.has_cloud_ = false;
+   md_.image_cnt_ = 0;
+-  md_.last_occ_update_time_ = rclcpp::Time(0, 0, RCL_SYSTEM_TIME);
++  md_.last_occ_update_time_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
+ 
+   md_.fuse_time_ = 0.0;
+   md_.update_num_ = 0;
+@@ -651,7 +653,7 @@
+   // inflate occupied voxels to compensate robot size
+ 
+   int inf_step = ceil(mp_.obstacles_inflation_ / mp_.resolution_);
+-  // int inf_step_z = 1;
++  // int inf_step_z = inf_step;
+   vector<Eigen::Vector3i> inf_pts(pow(2 * inf_step + 1, 3));
+   // inf_pts.resize(4 * inf_step + 3);
+   Eigen::Vector3i inf_pt;
+@@ -688,6 +690,16 @@
+         }
+       }
+ 
++  // Match the mission's lower flight envelope using the same native
++  // horizontal barrier representation as the existing virtual ceiling.
++  if (mp_.virtual_floor_height_ > -0.5) {
++    int floor_id = std::ceil((mp_.virtual_floor_height_ - mp_.map_origin_(2)) * mp_.resolution_inv_) - 1;
++    if (floor_id >= 0 && floor_id < mp_.map_voxel_num_(2))
++      for (int x = md_.local_bound_min_(0); x <= md_.local_bound_max_(0); ++x)
++        for (int y = md_.local_bound_min_(1); y <= md_.local_bound_max_(1); ++y)
++          md_.occupancy_buffer_inflate_[toAddress(x, y, floor_id)] = 1;
++  }
++
+   // add virtual ceiling to limit flight height
+   if (mp_.virtual_ceil_height_ > -0.5)
+   {
+@@ -830,7 +842,7 @@
+   Eigen::Vector3d p3d, p3d_inf;
+ 
+   int inf_step = ceil(mp_.obstacles_inflation_ / mp_.resolution_);
+-  int inf_step_z = 1;
++  int inf_step_z = inf_step;
+ 
+   double max_x, max_y, max_z, min_x, min_y, min_z;
+ 
+@@ -861,6 +873,8 @@
+         for (int y = -inf_step; y <= inf_step; ++y)
+           for (int z = -inf_step_z; z <= inf_step_z; ++z)
+           {
++            const double radius = mp_.obstacles_inflation_ + .866025403784 * mp_.resolution_;
++            if ((x*x+y*y+z*z)*mp_.resolution_*mp_.resolution_ > radius*radius) continue;
+ 
+             p3d_inf(0) = pt.x + x * mp_.resolution_;
+             p3d_inf(1) = pt.y + y * mp_.resolution_;
+@@ -902,6 +916,16 @@
+   // 更新局部地图边界
+   boundIndex(md_.local_bound_min_);
+   boundIndex(md_.local_bound_max_);
++
++  // Match the mission's lower flight envelope using the same native
++  // horizontal barrier representation as the existing virtual ceiling.
++  if (mp_.virtual_floor_height_ > -0.5) {
++    int floor_id = std::ceil((mp_.virtual_floor_height_ - mp_.map_origin_(2)) * mp_.resolution_inv_) - 1;
++    if (floor_id >= 0 && floor_id < mp_.map_voxel_num_(2))
++      for (int x = md_.local_bound_min_(0); x <= md_.local_bound_max_(0); ++x)
++        for (int y = md_.local_bound_min_(1); y <= md_.local_bound_max_(1); ++y)
++          md_.occupancy_buffer_inflate_[toAddress(x, y, floor_id)] = 1;
++  }
+ 
+   // add virtual ceiling to limit flight height
+   // 添加虚拟天花板控制飞行高度
+--- a/src/planner/plan_manage/include/ego_planner/ego_replan_fsm.h
++++ b/src/planner/plan_manage/include/ego_planner/ego_replan_fsm.h
+@@ -2,6 +2,11 @@
+ #define _REBO_REPLAN_FSM_H_
+ 
+ #include <Eigen/Eigen>
++#include <chrono>
++#include <std_msgs/msg/float64_multi_array.hpp>
++#include <std_msgs/msg/u_int64.hpp>
++#include <std_msgs/msg/bool.hpp>
++#include <std_msgs/msg/float64.hpp>
+ #include <algorithm>
+ #include <iostream>
+ #include "nav_msgs/msg/path.hpp"
+@@ -48,6 +53,12 @@
+       REFENCE_PATH = 3
+     };
+ 
++    rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr planning_metrics_pub_;
++
++    bool awaiting_acceptance_ = false;
++    uint64_t awaiting_native_id_ = 0;
++    rclcpp::Subscription<std_msgs::msg::UInt64>::SharedPtr acceptance_sub_;
++
+     /* planning utils */
+     EGOPlannerManager::Ptr planner_manager_;
+     PlanningVisualization::Ptr visualization_;
+@@ -82,6 +93,10 @@
+ 
+     /* ROS utils */
+     rclcpp::Node::SharedPtr node_;
++    bool execution_allowed_ = false;
++    double last_execution_time_ = -1;
++    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr permission_sub_;
++    rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr velocity_limit_sub_;
+     rclcpp::TimerBase::SharedPtr exec_timer_, safety_timer_;
+ 
+     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr waypoint_sub_;
+--- a/src/planner/plan_manage/include/ego_planner/planner_manager.h
++++ b/src/planner/plan_manage/include/ego_planner/planner_manager.h
+@@ -36,6 +36,8 @@
+     bool planGlobalTrajWaypoints(const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
+                                  const std::vector<Eigen::Vector3d> &waypoints, const Eigen::Vector3d &end_vel, const Eigen::Vector3d &end_acc);
+ 
++    std::pair<size_t,size_t> mapBufferCapacity() const { return grid_map_->mapBufferCapacity(); }
++    void setVelocityLimit(double value) { pp_.max_vel_=value; bspline_optimizer_->setVelocityLimit(value); }
+     void initPlanModules(rclcpp::Node::SharedPtr &node, PlanningVisualization::Ptr vis = NULL);
+ 
+     void deliverTrajToOptimizer(void) { bspline_optimizer_->setSwarmTrajs(&swarm_trajs_buf_); };
+@@ -55,6 +57,7 @@
+     SwarmTrajData swarm_trajs_buf_;
+ 
+   private:
++    rclcpp::Node::SharedPtr node_;
+     /* main planning algorithms & modules */
+     PlanningVisualization::Ptr visualization_;
+ 
+--- a/src/planner/plan_manage/src/ego_replan_fsm.cpp
++++ b/src/planner/plan_manage/src/ego_replan_fsm.cpp
+@@ -7,6 +7,7 @@
+   void EGOReplanFSM::init(rclcpp::Node::SharedPtr &node)
+   {
+     node_ = node;
++    planning_metrics_pub_ = node_->create_publisher<std_msgs::msg::Float64MultiArray>("/autonomy/planning_metrics", 10);
+     
+     current_wp_ = 0;
+     exec_state_ = FSM_EXEC_STATE::INIT;
+@@ -58,6 +59,23 @@
+     planner_manager_->deliverTrajToOptimizer(); // store trajectories
+     planner_manager_->setDroneIdtoOpt();
+ 
++    // The controller/observation guard owns execution permission. Reset the
++    // FSM after a rejection so the next plan starts from measured state.
++    permission_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
++      "/autonomy/execution_allowed", rclcpp::QoS(1).transient_local(),
++      [this](std_msgs::msg::Bool::ConstSharedPtr m) {
++        execution_allowed_=m->data;
++        if(!m->data) awaiting_acceptance_=false;
++        if(!m->data) { have_target_=false; have_trigger_=true; exec_state_=WAIT_TARGET; }
++      });
++    acceptance_sub_ = node_->create_subscription<std_msgs::msg::UInt64>(
++      "/autonomy/native_accepted", 10, [this](std_msgs::msg::UInt64::ConstSharedPtr m) {
++        if(m->data==awaiting_native_id_) awaiting_acceptance_=false;
++      });
++    velocity_limit_sub_ = node_->create_subscription<std_msgs::msg::Float64>(
++      "/autonomy/speed_limit", 10, [this](std_msgs::msg::Float64::ConstSharedPtr m) {
++        if(std::isfinite(m->data) && m->data>=.05 && m->data<=1) planner_manager_->setVelocityLimit(m->data);
++      });
+     /* callback*/
+     exec_timer_ = node_->create_wall_timer(std::chrono::milliseconds(10),
+                                            std::bind(&EGOReplanFSM::execFSMCallback, this));
+@@ -185,6 +203,11 @@
+ 
+   void EGOReplanFSM::planNextWaypoint(const Eigen::Vector3d next_wp)
+   {
++    if(awaiting_acceptance_) {
++      awaiting_acceptance_=false;
++      exec_state_=WAIT_TARGET;
++    }
++
+     bool success = false;
+     success = planner_manager_->planGlobalTraj(odom_pos_, odom_vel_, Eigen::Vector3d::Zero(), next_wp, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero());
+ 
+@@ -205,17 +228,10 @@
+       have_new_target_ = true;
+ 
+       /*** FSM状态转换 ***/
+-      if (exec_state_ == WAIT_TARGET)
++      if (exec_state_ == EXEC_TRAJ)
++        changeFSMExecState(REPLAN_TRAJ, "TRIG");
++      else
+         changeFSMExecState(GEN_NEW_TRAJ, "TRIG");
+-      else
+-      {
+-        while (exec_state_ != EXEC_TRAJ)
+-        {
+-          rclcpp::spin_some(node_);
+-          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+-        }
+-        changeFSMExecState(REPLAN_TRAJ, "TRIG");
+-      }
+ 
+       visualization_->displayGlobalPathList(gloabl_traj, 0.1, 0);
+     }
+@@ -241,7 +257,7 @@
+ 
+     init_pt_ = odom_pos_;
+ 
+-    Eigen::Vector3d end_wp(msg->pose.position.x, msg->pose.position.y, 1.0);
++    Eigen::Vector3d end_wp(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z);
+ 
+     planNextWaypoint(end_wp);
+   }
+@@ -273,16 +289,16 @@
+       return;
+ 
+     // if (abs((ros::Time::now() - msg->start_time).toSec()) > 0.25)
+-    rclcpp::Clock clock(RCL_SYSTEM_TIME);  // 确保使用当前节点的时间源
++    rclcpp::Clock clock(node_->get_clock()->get_clock_type());  // 确保使用当前节点的时间源
+     auto msg_time = rclcpp::Time(msg->start_time, clock.get_clock_type());
+-    // RCLCPP_INFO(node_->get_logger(), "Clock type: %d", rclcpp::Clock().now().get_clock_type());
++    // RCLCPP_INFO(node_->get_logger(), "Clock type: %d", node_->now().get_clock_type());
+     // RCLCPP_INFO(node_->get_logger(), "Start time clock type: %d", rclcpp::Time(msg->start_time).get_clock_type());
+     // RCLCPP_INFO(node_->get_logger(), "msg_time: %d", msg_time.get_clock_type());
+-    if (abs((rclcpp::Clock().now() - msg_time).seconds()) > 0.25)
++    if (abs((node_->now() - msg_time).seconds()) > 0.25)
+     {
+       // ROS_ERROR("Time difference is too large! Local - Remote Agent %d = %fs", msg->drone_id, (ros::Time::now() - msg->start_time).toSec());
+       RCLCPP_ERROR(node_->get_logger(), "Time difference is too large! Local - Remote Agent %d = %fs",
+-                   msg->drone_id, (rclcpp::Clock().now() - msg_time).seconds());
++                   msg->drone_id, (node_->now() - msg_time).seconds());
+       return;
+     }
+ 
+@@ -463,6 +479,10 @@
+ 
+   void EGOReplanFSM::execFSMCallback()
+   {
++    if(awaiting_acceptance_) return;
++    if(!execution_allowed_ || node_->now().seconds()<=last_execution_time_) return;
++    last_execution_time_=node_->now().seconds();
++
+     exec_timer_->cancel(); // To avoid blockage
+ 
+     static int fsm_num = 0;
+@@ -565,7 +585,7 @@
+     {
+       /* determine if need to replan */
+       LocalTrajData *info = &planner_manager_->local_data_;
+-      rclcpp::Time time_now = rclcpp::Clock().now();
++      rclcpp::Time time_now = node_->now();
+       double t_cur = (time_now - info->start_time_).seconds();
+       t_cur = std::min(info->duration_, t_cur);
+ 
+@@ -626,7 +646,7 @@
+     }
+     }
+ 
+-    data_disp_.header.stamp = rclcpp::Clock().now();
++    data_disp_.header.stamp = node_->now();
+     data_disp_pub_->publish(data_disp_);
+ 
+   force_return:;
+@@ -665,7 +685,7 @@
+ 
+     LocalTrajData *info = &planner_manager_->local_data_;
+     // ros::Time time_now = ros::Time::now();
+-    auto time_now = rclcpp::Clock().now();
++    auto time_now = node_->now();
+     // double t_cur = (time_now - info->start_time_).toSec();
+     double t_cur = (time_now - info->start_time_).seconds();
+ 
+@@ -698,6 +718,7 @@
+ 
+   void EGOReplanFSM::checkCollisionCallback()
+   {
++    if(!execution_allowed_ || awaiting_acceptance_) return;
+ 
+     LocalTrajData *info = &planner_manager_->local_data_;
+     auto map = planner_manager_->grid_map_;
+@@ -717,12 +738,12 @@
+     /* ---------- check trajectory ---------- */
+     constexpr double time_step = 0.01;
+     // double t_cur = (ros::Time::now() - info->start_time_).toSec();
+-    double t_cur = (rclcpp::Clock().now() - info->start_time_).seconds();
++    double t_cur = (node_->now() - info->start_time_).seconds();
+ 
+     Eigen::Vector3d p_cur = info->position_traj_.evaluateDeBoorT(t_cur);
+     const double CLEARANCE = 1.0 * planner_manager_->getSwarmClearance();
+     // double t_cur_global = ros::Time::now().toSec();
+-    double t_cur_global = rclcpp::Clock().now().seconds();
++    double t_cur_global = node_->now().seconds();
+ 
+     double t_2_3 = info->duration_ * 2 / 3;
+     for (double t = t_cur; t < info->duration_; t += time_step)
+@@ -782,11 +803,16 @@
+ 
+   bool EGOReplanFSM::callReboundReplan(bool flag_use_poly_init, bool flag_randomPolyTraj)
+   {
++    const auto planning_began = std::chrono::steady_clock::now();
+ 
+     getLocalTarget();
+ 
+     bool plan_and_refine_success =
+         planner_manager_->reboundReplan(start_pt_, start_vel_, start_acc_, local_target_pt_, local_target_vel_, (have_new_target_ || flag_use_poly_init), flag_randomPolyTraj);
++    auto capacity = planner_manager_->mapBufferCapacity();
++    std_msgs::msg::Float64MultiArray metrics;
++    metrics.data = {std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now()-planning_began).count(), plan_and_refine_success ? 1.0 : 0.0, double(capacity.first), double(capacity.second)};
++    planning_metrics_pub_->publish(metrics);
+     have_new_target_ = false;
+ 
+     cout << "refine_success=" << plan_and_refine_success << endl;
+@@ -821,7 +847,7 @@
+       }
+ 
+       /* 1. publish traj to traj_server */
+-      bspline_pub_->publish(bspline);
++      awaiting_native_id_=planner_manager_->local_data_.traj_id_; awaiting_acceptance_=true;      bspline_pub_->publish(bspline);
+ 
+       /* 2. publish traj to the next drone of swarm */
+ 
+@@ -915,6 +941,7 @@
+       bspline.knots.push_back(knots(i));
+     }
+ 
++    awaiting_native_id_=planner_manager_->local_data_.traj_id_; awaiting_acceptance_=true;
+     bspline_pub_->publish(bspline);
+ 
+     return true;
+--- a/src/planner/plan_manage/src/planner_manager.cpp
++++ b/src/planner/plan_manage/src/planner_manager.cpp
+@@ -12,6 +12,7 @@
+ 
+   void EGOPlannerManager::initPlanModules(rclcpp::Node::SharedPtr &node, PlanningVisualization::Ptr vis)
+   {
++    node_=node;
+     node->declare_parameter("manager/max_vel", -1.0);
+     node->declare_parameter("manager/max_acc", -1.0);
+     node->declare_parameter("manager/max_jerk", -1.0);
+@@ -61,7 +62,7 @@
+ 
+     bspline_optimizer_->setLocalTargetPt(local_target_pt);
+ 
+-    rclcpp::Time t_start = rclcpp::Clock().now();
++    rclcpp::Time t_start = node_->now();
+     rclcpp::Duration t_init(0, 0), t_opt(0, 0), t_refine(0, 0);
+ 
+     /*** STEP 1: INIT
+@@ -141,7 +142,7 @@
+       {
+ 
+         double t;
+-        double t_cur = (rclcpp::Clock().now() - local_data_.start_time_).seconds();
++        double t_cur = (node_->now() - local_data_.start_time_).seconds();
+ 
+         vector<double> pseudo_arc_length;
+         vector<Eigen::Vector3d> segment_point;
+@@ -223,7 +224,7 @@
+     vector<std::pair<int, int>> segments;
+     segments = bspline_optimizer_->initControlPoints(ctrl_pts, true);
+     // 计算时间差并更新时间
+-    auto now = rclcpp::Clock().now();
++    auto now = node_->now();
+     t_init = now - t_start;
+     t_start = now;
+ 
+@@ -267,14 +268,14 @@
+         }
+       }
+ 
+-      t_opt = rclcpp::Clock().now() - t_start;
++      t_opt = node_->now() - t_start;
+ 
+       visualization_->displayMultiInitPathList(vis_trajs, 0.2);
+     }
+     else
+     {
+       flag_step_1_success = bspline_optimizer_->BsplineOptimizeTrajRebound(ctrl_pts, ts);
+-      t_opt = rclcpp::Clock().now() - t_start;
++      t_opt = node_->now() - t_start;
+       // static int vis_id = 0;
+       visualization_->displayInitPathList(point_set, 0.2, 0);
+     }
+@@ -287,7 +288,7 @@
+       return false;
+     }
+ 
+-    t_start = rclcpp::Clock().now();
++    t_start = node_->now();
+ 
+     UniformBspline pos = UniformBspline(ctrl_pts, 3, ts);
+     pos.setPhysicalLimits(pp_.max_vel_, pp_.max_acc_, pp_.feasibility_tolerance_);
+@@ -299,17 +300,39 @@
+ 
+       double ratio;
+       bool flag_step_2_success = true;
+-      if (!pos.checkFeasibility(ratio, false))
+-      {
+-        cout << "Need to reallocate time." << endl;
++      // Native refinement optimises control points again after reallocating
++      // time. Recheck its result: one pass can reintroduce a velocity violation,
++      // especially at the low speeds used by the observation guard.
++      for (int refinement = 0; refinement < 5; ++refinement)
++      {
++        pos.setPhysicalLimits(pp_.max_vel_, pp_.max_acc_, pp_.feasibility_tolerance_);
++        if (pos.checkFeasibility(ratio, false)) break;
++        cout << "Need to reallocate time. feasibility ratio=" << ratio
++             << " controls=" << pos.getControlPoint().cols() << " interval=" << ts << endl;
++
++        if (refinement > 0)
++        {
++          // The upstream interior-only retime leaves endpoint knot spans
++          // unchanged. If refinement is still infeasible, uniformly retime
++          // its native knots before the original boundary-constrained refine.
++          // This fallback preserves curve geometry and stays inside the planner.
++          Eigen::VectorXd knots = pos.getKnot();
++          double anchor = knots(3);
++          knots = ((knots.array() - anchor) * ratio + anchor).matrix();
++          pos.setKnot(knots);
++          ratio = 1.0;
++        }
+ 
+         Eigen::MatrixXd optimal_control_points;
+         flag_step_2_success = refineTrajAlgo(pos, start_end_derivatives, ratio, ts, optimal_control_points);
+         if (flag_step_2_success)
+           pos = UniformBspline(optimal_control_points, 3, ts);
+-      }
+-
+-      if (!flag_step_2_success)
++        else
++          break;
++      }
++
++      pos.setPhysicalLimits(pp_.max_vel_, pp_.max_acc_, pp_.feasibility_tolerance_);
++      if (!flag_step_2_success || !pos.checkFeasibility(ratio, false))
+       {
+         printf("\033[34mThis refined trajectory hits obstacles. It doesn't matter if appeares occasionally. But if continously appearing, Increase parameter \"lambda_fitness\".\n\033[0m");
+         continous_failures_count_++;
+@@ -327,10 +350,10 @@
+     }
+ 
+     // t_refine = ros::Time::now() - t_start;
+-    t_refine = rclcpp::Clock().now() - t_start;
++    t_refine = node_->now() - t_start;
+ 
+     // save planned results
+-    updateTrajInfo(pos, rclcpp::Clock().now());
++    updateTrajInfo(pos, node_->now());
+ 
+     static double sum_time = 0;
+     static int count_success = 0;
+@@ -355,7 +378,7 @@
+       control_points.col(i) = stop_pos;
+     }
+ 
+-    updateTrajInfo(UniformBspline(control_points, 3, 1.0), rclcpp::Clock().now());
++    updateTrajInfo(UniformBspline(control_points, 3, 1.0), node_->now());
+ 
+     return true;
+   }
+@@ -363,7 +386,7 @@
+   bool EGOPlannerManager::checkCollision(int drone_id)
+   {
+     // if (local_data_.start_time_.toSec() < 1e9) // It means my first planning has not started
+-    if (local_data_.start_time_.seconds() < 1e9)
++    if (local_data_.duration_ <= 0)
+       return false;
+ 
+     // double my_traj_start_time = local_data_.start_time_.toSec();
+@@ -453,7 +476,7 @@
+     else
+       return false;
+ 
+-    auto time_now = rclcpp::Clock().now();
++    auto time_now = node_->now();
+ 
+     global_data_.setGlobalTraj(gl_traj, time_now);
+ 
+@@ -520,7 +543,7 @@
+     else
+       return false;
+ 
+-    auto time_now = rclcpp::Clock().now();
++    auto time_now = node_->now();
+ 
+     global_data_.setGlobalTraj(gl_traj, time_now);
+ 
+--- a/src/planner/traj_utils/src/planning_visualization.cpp
++++ b/src/planner/traj_utils/src/planning_visualization.cpp
+@@ -11,8 +11,8 @@
+                                                 Eigen::Vector4d color, int id, bool show_sphere /* = true */)
+   {
+     visualization_msgs::msg::Marker sphere, line_strip;
+-    sphere.header.frame_id = line_strip.header.frame_id = "world";
+-    sphere.header.stamp = line_strip.header.stamp = rclcpp::Clock().now();
++    sphere.header.frame_id = line_strip.header.frame_id = "odom";
++    sphere.header.stamp = line_strip.header.stamp = node_->now();
+     sphere.type = visualization_msgs::msg::Marker::SPHERE_LIST;
+     line_strip.type = visualization_msgs::msg::Marker::LINE_STRIP;
+     sphere.action = line_strip.action = visualization_msgs::msg::Marker::ADD;
+@@ -47,7 +47,7 @@
+   {
+     visualization_msgs::msg::Marker sphere, line_strip;
+     sphere.header.frame_id = line_strip.header.frame_id = "map";
+-    sphere.header.stamp = line_strip.header.stamp = rclcpp::Clock().now();
++    sphere.header.stamp = line_strip.header.stamp = node_->now();
+     sphere.type = visualization_msgs::msg::Marker::SPHERE_LIST;
+     line_strip.type = visualization_msgs::msg::Marker::LINE_STRIP;
+     sphere.action = line_strip.action = visualization_msgs::msg::Marker::ADD;
+@@ -82,7 +82,7 @@
+   {
+     visualization_msgs::msg::Marker arrow;
+     arrow.header.frame_id = "map";
+-    arrow.header.stamp = rclcpp::Clock().now();
++    arrow.header.stamp = node_->now();
+     arrow.type = visualization_msgs::msg::Marker::ARROW;
+     arrow.action = visualization_msgs::msg::Marker::ADD;
+ 
+@@ -122,8 +122,8 @@
+   void PlanningVisualization::displayGoalPoint(Eigen::Vector3d goal_point, Eigen::Vector4d color, const double scale, int id)
+   {
+     visualization_msgs::msg::Marker sphere;
+-    sphere.header.frame_id = "world";
+-    sphere.header.stamp = rclcpp::Clock().now();
++    sphere.header.frame_id = "odom";
++    sphere.header.stamp = node_->now();
+     sphere.type = visualization_msgs::msg::Marker::SPHERE;
+     sphere.action = visualization_msgs::msg::Marker::ADD;
+     sphere.id = id;

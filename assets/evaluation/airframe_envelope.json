@@ -1,0 +1,42 @@
+{
+  "observed_swept_ellipsoid_half_axes_m": [
+    0.5,
+    0.5,
+    0.35
+  ],
+  "results": [
+    {
+      "model": "x500_mid360",
+      "collisions": 11,
+      "geometry_sha256": "f343b6ae762e655538242609bd778cda8d23b4f9630a50e1db607dbc717aee67",
+      "maximum_normalized_radius": 0.9043928945054607,
+      "bounding_half_extent_m": [
+        0.3138715598484476,
+        0.3138715598484476,
+        0.227
+      ]
+    },
+    {
+      "model": "x500_avia",
+      "collisions": 11,
+      "geometry_sha256": "f7eaaf0f604bd71bf0b2d4076c8f8c6a04ed2aa3df2625d360d18b06bd760b10",
+      "maximum_normalized_radius": 0.9043928945054607,
+      "bounding_half_extent_m": [
+        0.3138715598484476,
+        0.3138715598484476,
+        0.227
+      ]
+    },
+    {
+      "model": "x500_os1_64",
+      "collisions": 11,
+      "geometry_sha256": "c85ea87f0fea9bfac783ebf7f0de8cefed7b210d1c720d8112925b7a7cbbfbd8",
+      "maximum_normalized_radius": 0.9043928945054607,
+      "bounding_half_extent_m": [
+        0.3138715598484476,
+        0.3138715598484476,
+        0.227
+      ]
+    }
+  ]
+}

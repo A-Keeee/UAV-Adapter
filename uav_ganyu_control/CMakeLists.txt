@@ -26,5 +26,20 @@ if(BUILD_TESTING)
   target_include_directories(bspline_check PRIVATE include)
   target_link_libraries(bspline_check Eigen3::Eigen)
   add_test(NAME bspline_check COMMAND bspline_check)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  add_test(NAME internal_brake_check COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/internal_brake_check.py $<TARGET_FILE:ganyu_controller>)
+  set_tests_properties(internal_brake_check PROPERTIES TIMEOUT 30)
+  add_test(NAME clock_rollback_check COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/internal_brake_check.py $<TARGET_FILE:ganyu_controller> --clock-reset)
+  set_tests_properties(clock_rollback_check PROPERTIES TIMEOUT 35)
+  add_test(NAME staged_takeoff_check COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/internal_brake_check.py $<TARGET_FILE:ganyu_controller> --staged-takeoff)
+  add_test(NAME staged_takeoff_brake_check COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/internal_brake_check.py $<TARGET_FILE:ganyu_controller> --staged-brake)
+  set_tests_properties(staged_takeoff_check staged_takeoff_brake_check PROPERTIES TIMEOUT 35)
+  add_test(NAME single_writer_check COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/single_writer_check.py $<TARGET_FILE:ganyu_controller>)
+  set_tests_properties(single_writer_check PROPERTIES TIMEOUT 25)
 endif()
 ament_package()

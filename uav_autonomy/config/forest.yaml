@@ -1,0 +1,22 @@
+autonomy:
+  ros__parameters:
+    use_sim_time: true
+    task: forest
+    auto_start: false
+    cloud_topic: /lidar/points
+    sensor_origin_frame: ""
+    goal: [80.0, 0.0, 1.8]
+    takeoff_height: 1.8
+    # Hard execution bounds stay fixed when native soft walls are tuned.
+    execution_min_z: 1.5
+    execution_max_z: 2.3
+    max_velocity: 1.0
+    safety_radius: 0.65
+    obstacle_uncertainty_margin: 0.15
+    # Checked clear launch cylinder in these simulation scenes, not lidar capability.
+    launch_clearance_radius: 1.3
+    launch_clearance_height: 3.0
+    # Leave time for cautious replans and observation turns at the 0.18 m/s
+    # reduced planning limit. The independent no-progress watchdog still stops
+    # blocked passages after 120 s without approaching B.
+    mission_timeout: 1500.0

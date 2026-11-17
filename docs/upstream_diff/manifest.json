@@ -1,0 +1,444 @@
+{
+  "ego_swarm": {
+    "revision": "23a8d5a191711dd65633df689bd00f55d4dea8f9",
+    "selected_paths": [
+      "src/planner",
+      "src/uav_simulator/Utils/quadrotor_msgs"
+    ],
+    "changed": [
+      {
+        "path": "src/planner/bspline_opt/include/bspline_opt/bspline_optimizer.h",
+        "upstream_sha256": "eddbbecf4a4ecb4140d8dcb78d6d0527c06de85335f186dee37c29e477b883e1",
+        "local_sha256": "7e12444b34adbe1306d03508d1529c9dfd2e1b2e1f589d37587c1a14a1c946a9"
+      },
+      {
+        "path": "src/planner/bspline_opt/src/bspline_optimizer.cpp",
+        "upstream_sha256": "13cf0895a9e00fb8e7280bce333814a9767920887ac27de10c9f47df3e0ef2ed",
+        "local_sha256": "26122d2722984c1eee90de71e0987abafb88f3ed8b70a192888ba1f0900e9f46"
+      },
+      {
+        "path": "src/planner/bspline_opt/src/uniform_bspline.cpp",
+        "upstream_sha256": "f03094a2fd3e36525ebe8ba0a1f4fd251502492464565f668b412cf7e3233398",
+        "local_sha256": "f57a3f0feec70729f35b58d681cc4ffc72773eb0e37f3ee80434d0cd96f08df2"
+      },
+      {
+        "path": "src/planner/plan_env/include/plan_env/grid_map.h",
+        "upstream_sha256": "5704d70393141618693ec20ec49433c8a250daa77a592596139a1ed19530bbba",
+        "local_sha256": "ad999cafce6aa29180b20dce8abd0a24fe251cb2310d0f8ad709d0682b873f10"
+      },
+      {
+        "path": "src/planner/plan_env/src/grid_map.cpp",
+        "upstream_sha256": "b9715e1d24afe14f04273b56d0fb4e7969e4d5ee674bfe8c76520befd8f69d04",
+        "local_sha256": "bc7755396fbccd19ecf633a8e1a7902af9d1302378370657333d6a3104711307"
+      },
+      {
+        "path": "src/planner/plan_manage/include/ego_planner/ego_replan_fsm.h",
+        "upstream_sha256": "452ce093771edd29abc8bf2bd02fd2622b313c179afc7a7e0cb38b2ace13f25c",
+        "local_sha256": "dc85036185959e20ee66cd77ee010c83b153ca435e1d7bcc8af0cf762f424355"
+      },
+      {
+        "path": "src/planner/plan_manage/include/ego_planner/planner_manager.h",
+        "upstream_sha256": "5fb295e2df808fea258b3508cdc9fa33afecec652be2a0dd5c23fd4de51d8a16",
+        "local_sha256": "47c53070bbc03a78a9fedcd0560833b8fadaa816643cabe82ba438fa39a971c9"
+      },
+      {
+        "path": "src/planner/plan_manage/src/ego_replan_fsm.cpp",
+        "upstream_sha256": "3d28a838ebd2e3649b2dcc8c8d9ae1208ba5419cdd142fd04775f184c289bacf",
+        "local_sha256": "78e01251d75749abd7f6e4c9b2f61e4e6b7c92076159217612cde314e9203273"
+      },
+      {
+        "path": "src/planner/plan_manage/src/planner_manager.cpp",
+        "upstream_sha256": "89feb7684cba072a65e3949a23c21980194de273a1b8625d0b27ec174d780215",
+        "local_sha256": "d4960dc12a840a155c92d11f0aecafed217262b678e26e0ce31027c736669872"
+      },
+      {
+        "path": "src/planner/traj_utils/src/planning_visualization.cpp",
+        "upstream_sha256": "0924bcc7281e21477f2df621a840312d9ba8477731a5fe2c6ab68b7333dc7e43",
+        "local_sha256": "98646728ea3173d3de5efe33e87d6c4bd3ed193926083ce0133b04608f709441"
+      }
+    ],
+    "unchanged": [
+      ".gitignore",
+      "LICENSE",
+      "Readme.md",
+      "src/planner/bspline_opt/CMakeLists.txt",
+      "src/planner/bspline_opt/include/bspline_opt/gradient_descent_optimizer.h",
+      "src/planner/bspline_opt/include/bspline_opt/lbfgs.hpp",
+      "src/planner/bspline_opt/include/bspline_opt/uniform_bspline.h",
+      "src/planner/bspline_opt/package.xml",
+      "src/planner/bspline_opt/src/gradient_descent_optimizer.cpp",
+      "src/planner/drone_detect/CMakeLists.txt",
+      "src/planner/drone_detect/README.md",
+      "src/planner/drone_detect/config/camera.yaml",
+      "src/planner/drone_detect/config/default.yaml",
+      "src/planner/drone_detect/doc/demo.jpg",
+      "src/planner/drone_detect/doc/example.jpg",
+      "src/planner/drone_detect/include/drone_detect/drone_detector.h",
+      "src/planner/drone_detect/launch/drone_detect.launch.py",
+      "src/planner/drone_detect/launch/ros_package_template_overlying_params.launch.py",
+      "src/planner/drone_detect/package.xml",
+      "src/planner/drone_detect/src/drone_detect_node.cpp",
+      "src/planner/drone_detect/src/drone_detector.cpp",
+      "src/planner/drone_detect/test/test_drone_detector.cpp",
+      "src/planner/path_searching/CMakeLists.txt",
+      "src/planner/path_searching/include/path_searching/dyn_a_star.h",
+      "src/planner/path_searching/package.xml",
+      "src/planner/path_searching/src/dyn_a_star.cpp",
+      "src/planner/plan_env/CMakeLists.txt",
+      "src/planner/plan_env/include/plan_env/linear_obj_model.hpp",
+      "src/planner/plan_env/include/plan_env/obj_predictor.h",
+      "src/planner/plan_env/include/plan_env/raycast.h",
+      "src/planner/plan_env/package.xml",
+      "src/planner/plan_env/src/obj_generator.cpp",
+      "src/planner/plan_env/src/obj_predictor.cpp",
+      "src/planner/plan_env/src/raycast.cpp",
+      "src/planner/plan_manage/CMakeLists.txt",
+      "src/planner/plan_manage/launch/advanced_param.launch.py",
+      "src/planner/plan_manage/launch/default.rviz",
+      "src/planner/plan_manage/launch/run_in_sim.launch.py",
+      "src/planner/plan_manage/launch/rviz.launch.py",
+      "src/planner/plan_manage/launch/simulator.launch.py",
+      "src/planner/plan_manage/launch/single_run_in_sim.launch.py",
+      "src/planner/plan_manage/launch/swarm.launch.py",
+      "src/planner/plan_manage/launch/swarm_large.launch.py",
+      "src/planner/plan_manage/package.xml",
+      "src/planner/plan_manage/src/ego_planner_node.cpp",
+      "src/planner/plan_manage/src/traj_server.cpp",
+      "src/planner/rosmsg_tcp_bridge/CMakeLists.txt",
+      "src/planner/rosmsg_tcp_bridge/launch/bridge.launch.py",
+      "src/planner/rosmsg_tcp_bridge/package.xml",
+      "src/planner/rosmsg_tcp_bridge/src/bridge_node.cpp",
+      "src/planner/traj_utils/CMakeLists.txt",
+      "src/planner/traj_utils/include/traj_utils/plan_container.hpp",
+      "src/planner/traj_utils/include/traj_utils/planning_visualization.h",
+      "src/planner/traj_utils/include/traj_utils/polynomial_traj.h",
+      "src/planner/traj_utils/msg/Bspline.msg",
+      "src/planner/traj_utils/msg/DataDisp.msg",
+      "src/planner/traj_utils/msg/MultiBsplines.msg",
+      "src/planner/traj_utils/package.xml",
+      "src/planner/traj_utils/src/polynomial_traj.cpp",
+      "src/uav_simulator/Utils/quadrotor_msgs/CMakeLists.txt",
+      "src/uav_simulator/Utils/quadrotor_msgs/include/quadrotor_msgs/comm_types.h",
+      "src/uav_simulator/Utils/quadrotor_msgs/include/quadrotor_msgs/decode_msgs.h",
+      "src/uav_simulator/Utils/quadrotor_msgs/include/quadrotor_msgs/encode_msgs.h",
+      "src/uav_simulator/Utils/quadrotor_msgs/msg/AuxCommand.msg",
+      "src/uav_simulator/Utils/quadrotor_msgs/msg/Corrections.msg",
+      "src/uav_simulator/Utils/quadrotor_msgs/msg/Gains.msg",
+      "src/uav_simulator/Utils/quadrotor_msgs/msg/LQRTrajectory.msg",
+      "src/uav_simulator/Utils/quadrotor_msgs/msg/Odometry.msg",
+      "src/uav_simulator/Utils/quadrotor_msgs/msg/OutputData.msg",
+      "src/uav_simulator/Utils/quadrotor_msgs/msg/PPROutputData.msg",
+      "src/uav_simulator/Utils/quadrotor_msgs/msg/PolynomialTrajectory.msg",
+      "src/uav_simulator/Utils/quadrotor_msgs/msg/PositionCommand.msg",
+      "src/uav_simulator/Utils/quadrotor_msgs/msg/SO3Command.msg",
+      "src/uav_simulator/Utils/quadrotor_msgs/msg/Serial.msg",
+      "src/uav_simulator/Utils/quadrotor_msgs/msg/StatusData.msg",
+      "src/uav_simulator/Utils/quadrotor_msgs/msg/TRPYCommand.msg",
+      "src/uav_simulator/Utils/quadrotor_msgs/package.xml",
+      "src/uav_simulator/Utils/quadrotor_msgs/src/decode_msgs.cpp",
+      "src/uav_simulator/Utils/quadrotor_msgs/src/encode_msgs.cpp"
+    ],
+    "patch_purpose": "Review diff with normalized line endings; SHA256 covers original raw bytes.",
+    "scope": "Only retained planner/message files are compared; unvendored upstream simulation utilities are excluded."
+  },
+  "ego_v2": {
+    "revision": "9d85475ea7b9bf5c112cf7c3c3d0d3f9e96d9010",
+    "selected_paths": [
+      "swarm-playground/main_ws/src/planner",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs"
+    ],
+    "changed": [
+      {
+        "path": "ros2_adapter/CMakeLists.txt",
+        "upstream_sha256": null,
+        "local_sha256": "e95f684dd142cdb0c5803cf2c205b4dda2edfef74d90f1b58497cd80e0fea24e"
+      },
+      {
+        "path": "ros2_adapter/include/ego_ros2/runtime.hpp",
+        "upstream_sha256": null,
+        "local_sha256": "41df31df0923468e4a72aa2ee08521c2a32dc0fe51b554932b28daebb0a315f1"
+      },
+      {
+        "path": "ros2_adapter/package.xml",
+        "upstream_sha256": null,
+        "local_sha256": "57c2baf02585ad9fe690de8a56bdef62d83f64e3853355eaa889a99bcc456436"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/Utils/quadrotor_msgs/CMakeLists.txt",
+        "upstream_sha256": "74ab67d668196da02b0dcb9af2e8a4ba3c65362ebeed844f887445dffca55766",
+        "local_sha256": "3b6ba35ee68a8479f7bf28e3fd2d0530ccaf9203574d59b8f0190980f131f7e5"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/LQRTrajectory.msg",
+        "upstream_sha256": "6b2bc9ef4704cceeaf2019c1cd698cb1a52f896b46ef81457160a42b720f4f5e",
+        "local_sha256": "d7ad7c645c96c99d259d9350560bd0f8128ef4a46168ec97ca02aeb4c6019002"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/OutputData.msg",
+        "upstream_sha256": "f4c2125a8258d048b25cb4528cbef0de3267dd91eb501df2eaecbeb6cba8bd68",
+        "local_sha256": "e758534426785e8668c62b7ef347d990249cfe07f7034b200b2d0b05f43dbe43"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/PPROutputData.msg",
+        "upstream_sha256": "53400dc4e6f3e8a866221af5cf35172b267df567e85cdcd664d64cbb0c8b06b0",
+        "local_sha256": "43f25e4fa62c359aff568b1efa40a46cb86124a67717eff271f7688c1aa2680d"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/PolynomialTrajectory.msg",
+        "upstream_sha256": "ae9241a3413ca1229daf3e5a6f43f794e4d1bb6f433dacf86eaace77a3a878ba",
+        "local_sha256": "81870339ef514b5cb8ac9aab7ce540d5da86e1a2b47680e8f1d5c8442ee07fbe"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/PositionCommand.msg",
+        "upstream_sha256": "6a79a878a0942cea73cc27613979c0bf5f8a0ee4b6375fdbe48928d338d43364",
+        "local_sha256": "84a8e2063748e0e3dedecd03cb2fe9a0c9efd6479efe011502d8f131a420c7f7"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/SO3Command.msg",
+        "upstream_sha256": "db5de254945dc6f4045819a0df809cd596a65e1fff2d6413e937c29f9b39fde1",
+        "local_sha256": "03dad28f9c795a1170147c2520dfcbf6cbb7daa3acedc6b4d83e7a714d149e2b"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/Serial.msg",
+        "upstream_sha256": "b98a312615a71d66e5e7022adce1fdade90873e77060882c8bd22d8603f846eb",
+        "local_sha256": "9beaf2b2883884ed1c6eb8ec25b6261bb7e98d7fd0b6c9a8bd7a70c2dbba4fbd"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/StatusData.msg",
+        "upstream_sha256": "6aea60de547e5d46749e592b980e8bb4c066172140e1a0eabf113977cdda8130",
+        "local_sha256": "4b6b5bbb98e606c578aa7f42058498425b2b7351d6e2c08d17cc3abe214775df"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/TRPYCommand.msg",
+        "upstream_sha256": "c22e8f1db7c33de5324568143dc131d6a2b7cc9a2aad94f471c27761914a720f",
+        "local_sha256": "0935f2f08f5cd90e4cecdd3af45c48dc112ada87f67cec053d28a5db51ab4298"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/Utils/quadrotor_msgs/package.xml",
+        "upstream_sha256": "81fe8300c124d698674d61f78f0c8901336825e554792df02860cba4249a772e",
+        "local_sha256": "918ed6347e25a914ca6b64b1937b2b3e43dfb4529271e869d32a3324e1647d7d"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/path_searching/CMakeLists.txt",
+        "upstream_sha256": "9c7dc2b939bcf67d29108c6cbe27f0b5cb57b9ec9aedae01544bcd741a041223",
+        "local_sha256": "baefca69148161ada9a3936d653d863cb41c233e774d0223ea8c6f971b00b74b"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/path_searching/include/path_searching/dyn_a_star.h",
+        "upstream_sha256": "3050702ab76069c2fc58080367d420e548f68e0dc3551ee1af7fb910c33dbf6c",
+        "local_sha256": "e7a3ebe09866bd18eb7c00e83d568233cb7f0d8eb1cd440b10ffbb48e9c77fcd"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/path_searching/package.xml",
+        "upstream_sha256": "e7c8407f6fa97604e6dfa66d1526c836e0a1685cd0ff5d89aa2b0c84835a5b5e",
+        "local_sha256": "93ae120098bec67d7648fe835d8bb9a2ec107f3561c8e60f11c40bcf41116faa"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/path_searching/src/dyn_a_star.cpp",
+        "upstream_sha256": "b95ff87fa3f3931e6f393c7614d299d4a757d946c4d27ab53c26e1c09a99b649",
+        "local_sha256": "e146626b411f9498e445b8e87dae1392ba0ec12c2a7df4def6de6d52bd953686"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/plan_env/CMakeLists.txt",
+        "upstream_sha256": "19b3bb86ccd17c54fc6005647c5c73c4d9f2a651287d5febcc13e57e2cc94634",
+        "local_sha256": "c8b1eb448927b19bd80c9eeffc8f20ff8bb79286488f29b9e689a3bb1201e3a5"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/plan_env/include/plan_env/grid_map.h",
+        "upstream_sha256": "b5328d17ea8443922a9d7243d8e13fa76035794ef22892d1cfb032404562cdd2",
+        "local_sha256": "e142a835560cefb898754720a88c5ecfca3a3a394070f5083d924ecf60364249"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/plan_env/package.xml",
+        "upstream_sha256": "ec3a18e0f160e3857ba4666b2d2197345e05d04d8a417fbb24710aca570272cc",
+        "local_sha256": "850e8436304e63c98b29ab4671edbef93293ce856c36120d6373c2ed8a2beb02"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/plan_env/src/grid_map.cpp",
+        "upstream_sha256": "ae79c65c28812ccfb3cddaa6489ea9e0653ce771699f7644bfba751be4ad612b",
+        "local_sha256": "937178814382392d0c004370b8943f09f395c075b05ff269d04498554ffc6823"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/plan_manage/CMakeLists.txt",
+        "upstream_sha256": "70a98de3b25824b1de73baf1eb565ac26c23acd2180b79241fc3b468d00e2d1b",
+        "local_sha256": "a12cc275f486fe6557cf38b96dd4e1fd449c00829dd93e2693a74bec37ad5ef7"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/plan_manage/include/plan_manage/ego_replan_fsm.h",
+        "upstream_sha256": "62dafe6270f9c52c6f2f34558e2ad4f2ae3d3638f262822169f99bb7680239ba",
+        "local_sha256": "4b232206233f9c4b2cf7207359c73171c46bcb12d91e3ef236e6860373177a25"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/plan_manage/include/plan_manage/planner_manager.h",
+        "upstream_sha256": "693b09fa414879c2977998966b3dadb56c20cb833fda140934be089d128427a9",
+        "local_sha256": "da61032f5cb11c7b18f9d870314e346fd90abcd2a368b51e02acc80359f456df"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/plan_manage/package.xml",
+        "upstream_sha256": "1c5ea5ae6c952ecddd201f4c776e4e5863fa1788a468c6cf1baa0b3c167c0682",
+        "local_sha256": "6ae948aaae2051416e2701cb1f846148f51f2c93bc4f860a369126fb74ee2198"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/plan_manage/src/ego_planner_node.cpp",
+        "upstream_sha256": "d3305dde90e888de3abb8d36eec5ad51d4627c66cf366d40d5dabb4dbaaa4388",
+        "local_sha256": "f9c95496b6fa06c7369a94c78725a9b54d98a9243516b559d1586c1da1eadd32"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/plan_manage/src/ego_replan_fsm.cpp",
+        "upstream_sha256": "aa68279e85b26a5c4e557e9630d1ac22de7d88bee3e05f14824c13c4dc5e6f79",
+        "local_sha256": "ac818e93566bfa597aa065bdb38cad1a0b9e4c26d0919befb96a79128d707eed"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/plan_manage/src/planner_manager.cpp",
+        "upstream_sha256": "d63f3f784bfe67271bcbac50c1dcc0a9e719149094ee7ad9e507236719e6862c",
+        "local_sha256": "7b9727294d2c22736078fa20e5d435797522de2731f1bef6fb5014c1aa72cc06"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/plan_manage/src/traj_server.cpp",
+        "upstream_sha256": "c163cd91984b479da66d005643f573747eae102454d6ec5ef5f36b0261ad3a05",
+        "local_sha256": "09e36964afea8836db49fd37bcdc559c66cb81a96fa4325b5c6e0fe0a530f4f5"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/traj_opt/CMakeLists.txt",
+        "upstream_sha256": "69a88d2835c64b8d541a8c6580dec14ebbdaebf40ac726b83de7f710e23a1e0f",
+        "local_sha256": "6a2485b3809ac85486535807f2689fa83a83075ff73068568714f69ca4151b31"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/traj_opt/include/optimizer/poly_traj_optimizer.h",
+        "upstream_sha256": "86f00298fe96a0201fbe7145cc46fd13cabae7114ce0d996b7735a5cc6e9fb93",
+        "local_sha256": "185a591cae4ffc6c0e7989cf3e5f6e2a459385d5f433aa31e11f19ff2e977eb5"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/traj_opt/package.xml",
+        "upstream_sha256": "7e9eba5d4ced802f93cf90bc6cb16e66281ff3afa350a7dbb7672d2f3d8f696d",
+        "local_sha256": "2ec02f5653eb122c7e8a3a25f8aaae9b5535b6f24efb9ca07ca8544e97ae285a"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/traj_opt/src/poly_traj_optimizer.cpp",
+        "upstream_sha256": "c2bcce963184c2ef2ff4b38b214c93199b6968f33862a2fcc94abe25a726ca79",
+        "local_sha256": "4eb81fe91c384e4fb6c5ccaa49f8ec07a6b7201f8f73f094057a0db790d36067"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/traj_utils/CMakeLists.txt",
+        "upstream_sha256": "4f6fa3a0206e6148147025e214cc360568ea2d4b76812b96ea4af6dd8c495bff",
+        "local_sha256": "550429c8463785e0c94bd772160664c448f40ee1961df1252c04a818efb5444c"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/traj_utils/include/traj_utils/plan_container.hpp",
+        "upstream_sha256": "2dc68bc6a67d9fbbd7482bdb14917a74a041aafb03c7e1f7037e02bfdb37b64c",
+        "local_sha256": "12c9267d7189e360b46d6ed8f6bd2028715b2a9b7174230b17013686b011506a"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/traj_utils/include/traj_utils/planning_visualization.h",
+        "upstream_sha256": "c82f1c70c253ba5c36c5414960bd2efb0d236836e223182d0e38c168697ac229",
+        "local_sha256": "a134dbba06c62206bec857df6e606bb0f52f353772cf60f21c8ad901e960fc16"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/traj_utils/msg/DataDisp.msg",
+        "upstream_sha256": "3867c49329e36ca5c781232992a0f38d2c7aa660f86b541150bf4a6e768ce7d2",
+        "local_sha256": "2be4716576556029802b796d0fa5b5c28799af95269980bcfc6dec05d84e698b"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/traj_utils/msg/MINCOTraj.msg",
+        "upstream_sha256": "763bc2dbcb7787edb470d8ebbcc4a5258e5f692195322e1e8e7c57c138f439d4",
+        "local_sha256": "5300e1ca0764bea0b76e22ef1808a12f08452a6572473b51d184ea6d62a979ff"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/traj_utils/msg/PolyTraj.msg",
+        "upstream_sha256": "ddb60743793fd2b99fb18ba4c783b894500b91b61c80ca20b213ba50c060f135",
+        "local_sha256": "391dbb71ce1772c9e7d35de80818c36567716d7282ce1f8a0b1b6e04dcd9d5fe"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/traj_utils/package.xml",
+        "upstream_sha256": "28aa8920e08455d168cad950bee155ceb4f8988111f064c4f4eb877384fccd25",
+        "local_sha256": "81066cec86594a9795fbfad20edd7c85ed4ee5db2a9b75dffd5bcff639ede9c2"
+      },
+      {
+        "path": "swarm-playground/main_ws/src/planner/traj_utils/src/planning_visualization.cpp",
+        "upstream_sha256": "a3a584e621eedfeb4a061beedfc34389eb274c5ff4ccc4314ab230c908fe106c",
+        "local_sha256": "3547f4d049244b3de9126cc8eed11252a845909ee8caaeeda2a397cacc43a76b"
+      }
+    ],
+    "unchanged": [
+      "LICENSE",
+      "README.md",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/cmake/FindEigen3.cmake",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/include/quadrotor_msgs/comm_types.h",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/include/quadrotor_msgs/decode_msgs.h",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/include/quadrotor_msgs/encode_msgs.h",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/AuxCommand.msg",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/Corrections.msg",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/Gains.msg",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/GoalSet.msg",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/Odometry.msg",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/PolynomialTrajectory.msg~",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/msg/PositionCommand.msg~",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/src/decode_msgs.cpp",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/src/encode_msgs.cpp",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/src/quadrotor_msgs/__init__.py",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/src/quadrotor_msgs/__init__.pyc",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/src/quadrotor_msgs/msg/_AuxCommand.py",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/src/quadrotor_msgs/msg/_Corrections.py",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/src/quadrotor_msgs/msg/_Gains.py",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/src/quadrotor_msgs/msg/_OutputData.py",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/src/quadrotor_msgs/msg/_PPROutputData.py",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/src/quadrotor_msgs/msg/_PositionCommand.py",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/src/quadrotor_msgs/msg/_SO3Command.py",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/src/quadrotor_msgs/msg/_Serial.py",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/src/quadrotor_msgs/msg/_StatusData.py",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/src/quadrotor_msgs/msg/_TRPYCommand.py",
+      "swarm-playground/main_ws/src/Utils/quadrotor_msgs/src/quadrotor_msgs/msg/__init__.py",
+      "swarm-playground/main_ws/src/planner/drone_detect/CMakeLists.txt",
+      "swarm-playground/main_ws/src/planner/drone_detect/LICENSE",
+      "swarm-playground/main_ws/src/planner/drone_detect/README.md",
+      "swarm-playground/main_ws/src/planner/drone_detect/config/camera.yaml",
+      "swarm-playground/main_ws/src/planner/drone_detect/config/default.yaml",
+      "swarm-playground/main_ws/src/planner/drone_detect/doc/demo.jpg",
+      "swarm-playground/main_ws/src/planner/drone_detect/doc/example.jpg",
+      "swarm-playground/main_ws/src/planner/drone_detect/include/drone_detector/drone_detector.h",
+      "swarm-playground/main_ws/src/planner/drone_detect/launch/drone_detect.launch",
+      "swarm-playground/main_ws/src/planner/drone_detect/launch/ros_package_template_overlying_params.launch",
+      "swarm-playground/main_ws/src/planner/drone_detect/package.xml",
+      "swarm-playground/main_ws/src/planner/drone_detect/src/drone_detect_node.cpp",
+      "swarm-playground/main_ws/src/planner/drone_detect/src/drone_detector.cpp",
+      "swarm-playground/main_ws/src/planner/drone_detect/test/test_drone_detector.cpp",
+      "swarm-playground/main_ws/src/planner/plan_env/include/plan_env/grid_map_bigmap.h",
+      "swarm-playground/main_ws/src/planner/plan_env/include/plan_env/raycast.h",
+      "swarm-playground/main_ws/src/planner/plan_env/src/grid_map_bigmap.cpp",
+      "swarm-playground/main_ws/src/planner/plan_env/src/raycast.cpp",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/autoflight.launch",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/circle_exchange.launch",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/circle_exchange_large.launch",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/include/advanced_param.xml",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/include/default.rviz",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/include/local_map_off.rviz",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/include/run_in_sim.xml",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/include/simulator.xml",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/launch_gen.py",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/moving_obstacles_avoidance.launch",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/multi_drone_interactive.launch",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/rviz.launch",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/single_drone_interactive.launch",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/single_drone_waypoints.launch",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/swarm.launch",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/swarm_large.launch",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/test.launch",
+      "swarm-playground/main_ws/src/planner/plan_manage/launch/test_gen.py",
+      "swarm-playground/main_ws/src/planner/swarm_bridge/CMakeLists.txt",
+      "swarm-playground/main_ws/src/planner/swarm_bridge/include/reliable_bridge.hpp",
+      "swarm-playground/main_ws/src/planner/swarm_bridge/launch/bridge_tcp_drone.launch",
+      "swarm-playground/main_ws/src/planner/swarm_bridge/launch/bridge_tcp_station.launch",
+      "swarm-playground/main_ws/src/planner/swarm_bridge/launch/bridge_udp.launch",
+      "swarm-playground/main_ws/src/planner/swarm_bridge/package.xml",
+      "swarm-playground/main_ws/src/planner/swarm_bridge/src/bridge_node_tcp.cpp",
+      "swarm-playground/main_ws/src/planner/swarm_bridge/src/bridge_node_udp.cpp",
+      "swarm-playground/main_ws/src/planner/swarm_bridge/src/traj2odom_node.cpp",
+      "swarm-playground/main_ws/src/planner/traj_opt/include/optimizer/gcopter.hpp",
+      "swarm-playground/main_ws/src/planner/traj_opt/include/optimizer/lbfgs.hpp",
+      "swarm-playground/main_ws/src/planner/traj_opt/include/optimizer/poly_traj_utils.hpp",
+      "swarm-playground/main_ws/src/planner/traj_opt/include/optimizer/root_finder.hpp"
+    ],
+    "patch_purpose": "Review diff with normalized line endings; SHA256 covers original raw bytes.",
+    "scope": "Only retained planner/message files are compared; unvendored upstream simulation utilities are excluded."
+  }
+}
